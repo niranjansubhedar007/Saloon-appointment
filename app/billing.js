@@ -35,6 +35,13 @@ export default function Billing() {
   const [agentCalendarModalVisible, setAgentCalendarModalVisible] =
     useState(false);
   const [productModalVisible, setProductModalVisible] = useState(false);
+  const [showQrCode, setShowQrCode] = useState(false);
+  const [completedAssignmentsCount, setCompletedAssignmentsCount] = useState(0);
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountType, setDiscountType] = useState("subtract"); // or "add" as default
+
+  const [discount, setDiscount] = useState("");
+  const [isAddDiscount, setIsAddDiscount] = useState(false);
 
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [selectedDateTime, setSelectedDateTime] = useState(null);
@@ -71,6 +78,28 @@ export default function Billing() {
       console.error("Error fetching orders:", error.message);
     }
   };
+  const fetchCompletedAssignmentCount = async (userId) => {
+    try {
+      const { count, error } = await supabase
+        .from("Appointments")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_complete", true);
+
+      if (error) {
+        console.error("Error fetching assignment count:", error.message);
+      } else {
+        setCompletedAssignmentsCount(count || 0);
+      }
+      console.log("Completed Assignments Count:", count);
+    } catch (error) {
+      console.error(
+        "Unexpected error fetching assignment count:",
+        error.message
+      );
+    }
+  };
+
   const fetchOrderDetails = async (orderNos) => {
     try {
       const { data, error } = await supabase
@@ -103,6 +132,7 @@ export default function Billing() {
   const handleCompletePress = async (appointment) => {
     console.log("✅ Selected Appointment:", appointment);
     setSelectedAppointment(appointment);
+    await fetchCompletedAssignmentCount(appointment.user_id);
     selectedAppointmentRef.current = appointment; // ✅ Store appointment in ref
     setModalVisible(true);
 
@@ -175,24 +205,41 @@ export default function Billing() {
     }
   }, [selectedAgent, selectedDateTime?.date]); // Trigger on agent/date change
 
-  const fetchAgents = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("Agents")
-        .select("id,full_name, mobile_number");
-
-      if (error) throw error;
-
-      setAgents(data);
-    } catch (error) {
-      console.error("Error fetching agents:", error.message);
-    }
-  };
-
   useEffect(() => {
-    fetchAgents();
+    const fetchLoggedInAgent = async () => {
+      const agentId = await AsyncStorage.getItem("@agentId");
+      if (!agentId) return;
+  
+      try {
+        const { data, error } = await supabase
+          .from("Agents")
+          .select("id, full_name, mobile_number")
+          .eq("id", agentId)
+          .single();
+  
+        if (error) throw error;
+  
+        setAgents(data ? [data] : []);
+        // Automatically select the logged-in agent
+        setSelectedAgent(data);
+        // Set default date to today
+        const today = new Date().toISOString().split("T")[0];
+        setSelectedDateTime({
+          date: today,
+          startTime: "",
+          endTime: "",
+          status: "Booked",
+        });
+        // Fetch appointments for today
+        fetchAppointments(data.id, today);
+      } catch (error) {
+        console.error("Error fetching agent:", error.message);
+      }
+    };
+  
+    fetchLoggedInAgent();
   }, []);
-
+  
   const fetchLatestUser = async () => {
     try {
       // First, check if there's a saved recipient in AsyncStorage
@@ -435,6 +482,16 @@ export default function Billing() {
     }
   }, [selectedAgent]);
 
+  // const convertTo12HourFormat = (timeString) => {
+  //   if (!timeString) return ""; // Handle empty time
+
+  //   const [hours, minutes] = timeString.split(":").map(Number);
+  //   const period = hours >= 12 ? "PM" : "AM";
+  //   const formattedHours = hours % 12 || 12; // Convert 0 to 12
+
+  //   return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${period}`;
+  // };
+
   const convertTo12HourFormat = (timeString) => {
     if (!timeString) return ""; // Handle empty time
 
@@ -444,6 +501,22 @@ export default function Billing() {
 
     return `${formattedHours}:${minutes.toString().padStart(2, "0")} ${period}`;
   };
+
+  const sortAppointmentsByTime = (appointments) => {
+    return appointments.sort((a, b) => {
+      // Convert start time to minutes since midnight for comparison
+      const [aHours, aMinutes] = a.start_time.split(":").map(Number);
+      const [bHours, bMinutes] = b.start_time.split(":").map(Number);
+
+      const aTimeInMinutes = aHours * 60 + aMinutes;
+      const bTimeInMinutes = bHours * 60 + bMinutes;
+
+      return aTimeInMinutes - bTimeInMinutes; // Ascending order (smallest to largest)
+    });
+  };
+
+  const sortedAppointments = sortAppointmentsByTime(appointments);
+
   const formatDate = (dateString) => {
     if (!dateString) return ""; // Handle empty date
 
@@ -605,17 +678,33 @@ export default function Billing() {
   };
   const handlePaymentConfirmation = async (order) => {
     try {
+      let grandTotal = parseFloat(order.subtotal); // start with original value
+
+      // Apply Discount Logic
+      if (discountType === "subtract") {
+        grandTotal -= parseFloat(discountAmount) || 0;
+      } else if (discountType === "add") {
+        grandTotal += parseFloat(discountAmount) || 0;
+      }
+
+      const subtotal = parseFloat(order.subtotal); // ✅ fix: always original value
+
       const updates = {
         is_print: true,
         is_payment: true,
         mobile_number: Number(userMapNumber[selectedAppointment.user_id]) || 0,
-        cash_amount: paymentMethod === "cash" ? parseFloat(paymentAmount) : 0,
-        card_amount: paymentMethod === "card" ? parseFloat(paymentAmount) : 0,
-        online_amount:
-          paymentMethod === "online" ? parseFloat(paymentAmount) : 0,
+        cash_amount: paymentMethod === "cash" ? grandTotal : 0,
+        card_amount: paymentMethod === "card" ? grandTotal : 0,
+        online_amount: paymentMethod === "online" ? grandTotal : 0,
+        discount_amount: parseFloat(discountAmount) || 0,
+        discount_type: discountType,
+        grand_total: grandTotal,
+        subtotal: subtotal,
       };
 
-      // ✅ Step 1: Update Orders Table (Only payment status & amounts)
+      const agentId = selectedAgent?.id;
+
+      // ✅ Step 1: Update Orders Table
       const { error: orderError } = await supabase
         .from("Orders")
         .update(updates)
@@ -623,7 +712,7 @@ export default function Billing() {
 
       if (orderError) throw orderError;
 
-      // ✅ Step 2: Update Appointments Table (Mark as Success)
+      // ✅ Step 2: Update Appointments Table
       const { error: appointmentError } = await supabase
         .from("Appointments")
         .update({ is_complete: true })
@@ -631,14 +720,15 @@ export default function Billing() {
 
       if (appointmentError) throw appointmentError;
 
-      // ✅ Step 3: Clear selected products and show success message
+      // ✅ Step 3: Clear and notify
       setSelectedProducts([]);
       Alert.alert("Success", "Payment recorded successfully!");
-
-      // Close modal
       setPaymentMethod(null);
       setPaymentAmount("");
+      setDiscountAmount("");
+      setDiscountType("subtract");
       setModalVisible(false);
+      await fetchAppointments(agentId, selectedDateTime.date);
     } catch (error) {
       console.error("Payment error:", error.message);
       Alert.alert("Error", "Failed to process payment.");
@@ -939,79 +1029,15 @@ export default function Billing() {
     }
   }, [paymentMethod, selectedOrder, selectedProducts]); // ✅ Runs when paymentMethod, order, or products change
 
+  const toggleQrCode = () => {
+    setShowQrCode(!showQrCode);
+  };
   return (
     <>
       <View style={{ padding: 10 }}>
         <View style={styles.agentListContainer}>
-          <Text style={styles.agentListTitle}>Choose Professional</Text>
-          <FlatList
-            data={agents}
-            keyExtractor={(item) => item.mobile_number}
-            horizontal
-            showsHorizontalScrollIndicator={true} // Enable Scroll Indicator
-            renderItem={({ item }) => {
-              const isSelected = selectedAgent?.id === item.id; // Check if agent is selected
-
-              return (
-                <TouchableOpacity
-                  onPress={async () => {
-                    setSelectedAgent(item);
-                  }}
-                  onLongPress={async () => {
-                    setSelectedAgent(item);
-
-                    // Get today's date in "YYYY-MM-DD" format if no date is selected
-                    const defaultDate = new Date().toISOString().split("T")[0];
-                    const selectedDate = selectedDateTime?.date || defaultDate;
-
-                    console.log(
-                      "Fetching for Agent:",
-                      item.id,
-                      "on Date:",
-                      selectedDate
-                    );
-
-                    await fetchAppointments(item.id, selectedDate); // ✅ Pass a valid date
-
-                    setAgentCalendarModalVisible(true);
-                    setSelectedDateTime({
-                      date: selectedDate,
-                      startTime: "",
-                      endTime: "",
-                      status: "Booked",
-                    });
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.agentCard,
-                      isSelected && styles.selectedAgentCard, // Apply red background if selected
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.agentName,
-                        isSelected && styles.selectedAgentName, // Apply red background if selected
-                      ]}
-                    >
-                      {item.full_name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.agentNumber,
-                        isSelected && styles.selectedAgentNumber, // Apply red background if selected
-                      ]}
-                    >
-                      {item.mobile_number}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        </View>
-
-        <View style={styles.appointmentContainer}>
+          {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
+    
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {generateWeekDatesForAppointments().map((item, index) => (
               <TouchableOpacity
@@ -1066,87 +1092,94 @@ export default function Billing() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+        </View>
 
-          {appointments.length > 0 ? (
-            <View style={{ marginTop: 8 }}>
-              <Text style={{ fontSize: 10, marginLeft: 8 }}>Appointments:</Text>
-              {appointments.map((appt, index) => (
-                <View key={index} style={styles.appointmentCard}>
-                  <View>
-                    <Text style={styles.appointmentText}>
-                      User: {userMap[appt.user_id] || "Unknown User"}{" "}
-                      {userMapNumber[appt.user_id] || "Unknown User"}
-                    </Text>
+        <View style={styles.appointmentContainer}>
+          <ScrollView style={{ height: 570 }}>
+            {appointments.length > 0 ? (
+              <View style={{ marginTop: 3 }}>
+                <Text style={{ fontSize: 12, marginLeft: 5 }}>
+                  Appointments:
+                </Text>
+                {appointments.map((appt, index) => (
+                  <View key={index} style={styles.appointmentCard}>
+                    <View>
+                      <Text style={styles.appointmentText}>
+                        {userMap[appt.user_id] || "Unknown User"}{" "}
+                      </Text>
 
-                    <Text style={styles.appointmentText}>
-                      Time: {convertTo12HourFormat(appt.start_time)} -{" "}
-                      {convertTo12HourFormat(appt.end_time)}
-                    </Text>
+                      <Text style={styles.appointmentText}>
+                        {convertTo12HourFormat(appt.start_time)} -{" "}
+                        {convertTo12HourFormat(appt.end_time)}
+                      </Text>
+                    </View>
+                    <View style={styles.buttonContainer}>
+                      {/* Complete Button */}
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.completeButton]}
+                        onPress={() => handleCompletePress(appt)}
+                      >
+                        <FontAwesome name="check" size={15} color="white" />
+                      </TouchableOpacity>
+                      {/* Cancel Button */}
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.cancelButton]}
+                        onPress={() => handleCancelAppointment(appt.id)}
+                      >
+                        <FontAwesome name="times" size={15} color="white" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.recallButton]}
+                        onPress={() => {
+                          if (!selectedAppointmentRef.current) {
+                            Alert.alert("Error", "No appointment available.");
+                            return;
+                          }
+
+                          const userId = selectedAppointmentRef.current.user_id;
+
+                          if (!userId) {
+                            Alert.alert(
+                              "Error",
+                              "No user ID found in appointment."
+                            );
+                            return;
+                          }
+
+                          const userPhoneNumber = userMapNumber[userId];
+
+                          if (!userPhoneNumber) {
+                            Alert.alert(
+                              "Error",
+                              "User phone number not found."
+                            );
+                            return;
+                          }
+
+                          setTimeout(() => {
+                            Linking.openURL(`tel:${userPhoneNumber}`);
+                          }, 500); // ✅ Small delay
+                        }}
+                      >
+                        <FontAwesome name="phone" size={15} color="white" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.buttonContainer}>
-                    {/* Complete Button */}
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.completeButton]}
-                      onPress={() => handleCompletePress(appt)}
-                    >
-                      <FontAwesome name="check" size={15} color="white" />
-                    </TouchableOpacity>
-                    {/* Cancel Button */}
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.cancelButton]}
-                      onPress={() => handleCancelAppointment(appt.id)}
-                    >
-                      <FontAwesome name="times" size={15} color="white" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.recallButton]}
-                      onPress={() => {
-
-                        if (!selectedAppointmentRef.current) {
-                          Alert.alert("Error", "No appointment available.");
-                          return;
-                        }
-
-                        const userId = selectedAppointmentRef.current.user_id;
-
-                        if (!userId) {
-                          Alert.alert(
-                            "Error",
-                            "No user ID found in appointment."
-                          );
-                          return;
-                        }
-
-                        const userPhoneNumber = userMapNumber[userId];
-
-                        if (!userPhoneNumber) {
-                          Alert.alert("Error", "User phone number not found.");
-                          return;
-                        }
-
-                        setTimeout(() => {
-                          Linking.openURL(`tel:${userPhoneNumber}`);
-                        }, 500); // ✅ Small delay
-                      }}
-                    >
-                      <FontAwesome name="phone" size={15} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Text
-              style={{
-                fontSize: 10,
-                color: "gray",
-                marginTop: 10,
-                marginLeft: 5,
-              }}
-            >
-              No appointments found.
-            </Text>
-          )}
+                ))}
+              </View>
+            ) : (
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: "gray",
+                  marginTop: 5,
+                  marginLeft: 5,
+                }}
+              >
+                No appointments found.
+              </Text>
+            )}
+          </ScrollView>
         </View>
         <Modal
           animationType="slide"
@@ -1170,8 +1203,8 @@ export default function Billing() {
                 width: "80%",
               }}
             >
-              <Text style={{ fontSize: 12, marginBottom: 10 }}>
-                {selectedAgent?.full_name}'s Unavailability 
+              <Text style={{ fontSize: 13, marginBottom: 10 }}>
+                {selectedAgent?.full_name}'s Unavailability
               </Text>
 
               {/* Start Date Picker */}
@@ -1181,7 +1214,7 @@ export default function Billing() {
                     padding: 10,
                     borderWidth: 1,
                     borderRadius: 5,
-                    fontSize: 10,
+                    fontSize: 12,
                   }}
                 >
                   📅 Start Date: {startDate.toDateString()}
@@ -1207,7 +1240,7 @@ export default function Billing() {
                     borderWidth: 1,
                     borderRadius: 5,
                     marginTop: 10,
-                    fontSize: 10,
+                    fontSize: 12,
                   }}
                 >
                   📅 End Date: {endDate.toDateString()}
@@ -1233,7 +1266,7 @@ export default function Billing() {
                     borderWidth: 1,
                     borderRadius: 5,
                     marginTop: 10,
-                    fontSize: 10,
+                    fontSize: 12,
                   }}
                 >
                   ⏰ Start Time: {startTime.toLocaleTimeString()}
@@ -1259,7 +1292,7 @@ export default function Billing() {
                     borderWidth: 1,
                     borderRadius: 5,
                     marginTop: 10,
-                    fontSize: 10,
+                    fontSize: 12,
                   }}
                 >
                   ⏰ End Time: {endTime.toLocaleTimeString()}
@@ -1288,7 +1321,7 @@ export default function Billing() {
                 }}
                 onPress={handleSubmit}
               >
-                <Text style={{ color: "white", fontSize: 10 }}>Save</Text>
+                <Text style={{ color: "white", fontSize: 12 }}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.closeButton}
@@ -1325,6 +1358,11 @@ export default function Billing() {
                     </Text>
                   </View>
                   <View style={styles.rowContainer}>
+                    <Text style={styles.bold}>Previous Completed Visits</Text>
+                    <Text style={styles.bold}>{completedAssignmentsCount}</Text>
+                  </View>
+
+                  <View style={styles.rowContainer}>
                     <Text style={styles.bold}>Time</Text>
                     <Text style={styles.bold}>
                       {convertTo12HourFormat(selectedAppointment.start_time)} -{" "}
@@ -1338,6 +1376,15 @@ export default function Billing() {
                       {formatDate(selectedAppointment.appointment_date)}
                     </Text>
                   </View>
+                  {showQrCode && (
+                    <View style={styles.qrOverlay}>
+                      <Image
+                        source={require("../assets/QR-code.png")}
+                        style={styles.qrImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
 
                   <View style={styles.rowContainer}>
                     <Text style={styles.bold}>Agent</Text>
@@ -1347,7 +1394,7 @@ export default function Billing() {
                   </View>
                   <View>
                     <Text
-                      style={[styles.text, { marginBottom: 2, paddingLeft: 2 }]}
+                      style={[styles.text, { marginBottom: 2, paddingLeft: 2 , marginTop:5 , borderTopColor:"gray", borderTopWidth:1 ,paddingTop:5}]}
                     >
                       <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
                       <Text
@@ -1357,7 +1404,7 @@ export default function Billing() {
                           setProductModalVisible(true);
                         }}
                       >
-                        ADD ORDER
+                        ADD SERVICE
                       </Text>
                     </Text>
                   </View>
@@ -1580,7 +1627,7 @@ export default function Billing() {
                               >
                                 <Text
                                   style={[
-                                    { fontSize: 10 }, // ✅ Set font size to 10
+                                    { fontSize: 12 }, // ✅ Set font size to 10
                                     paymentMethod === method
                                       ? { color: "white" }
                                       : {},
@@ -1591,6 +1638,74 @@ export default function Billing() {
                                 </Text>
                               </TouchableOpacity>
                             ))}
+                          </View>
+                          <View
+                            style={{
+                              marginBottom: 1,
+                              marginTop: 5,
+                              flexDirection: "row",
+                              width: "100%",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+
+                            }}
+                          >
+                            <TextInput
+                              style={styles.paymentInputDis}
+                              placeholder={  discountType === "add" ? "Add Amount" : "Discount Amount"}
+                              keyboardType="numeric"
+                              value={discountAmount}
+                              onChangeText={setDiscountAmount}
+                            />
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                justifyContent: "space-between",
+                                gap:10,
+                                
+                              }}
+                            >
+                              <TouchableOpacity
+                                style={[
+                                  styles.paymentButtonDis,
+                                  discountType === "subtract" &&
+                                    styles.selectedPaymentDis,
+                                ]}
+                                onPress={() => setDiscountType("subtract")}
+                              >
+                                <Text
+                                  style={{
+                                    color:
+                                      discountType === "subtract"
+                                        ? "#fff"
+                                        : "#000",
+                                    fontSize: 18,
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  -
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.paymentButtonDis,
+                                  discountType === "add" &&
+                                    styles.selectedPaymentDis,
+                                ]}
+                                onPress={() => setDiscountType("add")}
+                              >
+                                <Text
+                                  style={{
+                                    color:
+                                      discountType === "add" ? "#fff" : "#000",
+                                    fontSize: 18,
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  +
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
 
                           {/* Payment Input & Confirmation */}
@@ -1605,16 +1720,33 @@ export default function Billing() {
                                   placeholder="Amount"
                                 />
 
-                                <TouchableOpacity
-                                  style={styles.confirmButton}
-                                  onPress={() =>
-                                    handlePaymentConfirmation(order)
-                                  }
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    width: "50%",
+                                    gap: 5,
+                                  }}
                                 >
-                                  <Text style={styles.confirmButtonText}>
-                                    Payment
-                                  </Text>
-                                </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.confirmButton}
+                                    onPress={() =>
+                                      handlePaymentConfirmation(order)
+                                    }
+                                  >
+                                    <Text style={styles.confirmButtonText}>
+                                      Payment
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.confirmButton}
+                                    onPress={toggleQrCode}
+                                  >
+                                    <Text style={styles.confirmButtonText}>
+                                      {" "}
+                                      {showQrCode ? "Close QR" : "Open QR"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
                             )}
                         </View>
@@ -1622,7 +1754,7 @@ export default function Billing() {
                     </View>
                   ) : (
                     <Text
-                      style={{ fontSize: 12, color: "gray", marginTop: 10 }}
+                      style={{ fontSize: 13, color: "gray", marginTop: 10 }}
                     >
                       No orders found.
                     </Text>
@@ -1708,6 +1840,21 @@ export default function Billing() {
   );
 }
 const styles = StyleSheet.create({
+  qrOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  qrImage: {
+    width: 250,
+    height: 250,
+    backgroundColor: "white",
+  },
   productContainer: {
     flex: 1, // ✅ Ensures equal spacing between items
     alignItems: "center",
@@ -1723,7 +1870,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 70,
   },
-
+  modalTitleProduct: {
+    marginTop: 5,
+    fontSize: 13,
+    marginLeft: 15,
+    color: "#333",
+    marginBottom: 7,
+  },
   counter: {
     position: "absolute",
     bottom: -5,
@@ -1741,7 +1894,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   productName: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#333",
     textAlign: "center",
   },
@@ -1757,7 +1910,7 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   selectedProductsTitle: {
-    fontSize: 10,
+    fontSize: 12,
 
     color: "#333",
     marginBottom: 10,
@@ -1772,7 +1925,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#ddd",
   },
   selectedProductName: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "600",
     color: "#333",
     flex: 2,
@@ -1789,7 +1942,7 @@ const styles = StyleSheet.create({
   qtyInput: {
     width: 40,
     textAlign: "center",
-    fontSize: 10,
+    fontSize: 12,
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 5,
@@ -1803,7 +1956,7 @@ const styles = StyleSheet.create({
     color: "#007BFF",
   },
   selectedProductPrice: {
-    fontSize: 10,
+    fontSize: 12,
 
     flex: 1,
     textAlign: "right",
@@ -1820,7 +1973,7 @@ const styles = StyleSheet.create({
   },
 
   totalText: {
-    fontSize: 10,
+    fontSize: 12,
 
     color: "#007BFF",
   },
@@ -1837,15 +1990,15 @@ const styles = StyleSheet.create({
 
   counterText: {
     color: "white",
-    fontSize: 10,
+    fontSize: 12,
   },
 
   uniqueId: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#f39c12",
   },
   price: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#27ae60",
   },
   modalOverlayProduct: {
@@ -1857,14 +2010,15 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderTopLeftRadius: 15,
     borderTopRightRadius: 15,
-    paddingLeft: 0,
-    paddingRight: 0,
+    paddingLeft: 5,
+    paddingRight: 5,
     paddingTop: 20,
-    height: "82%",
+    height: "auto",
+    margin: 10,
   },
   boldSecond: {
     marginTop: 7,
-    fontSize: 12,
+    fontSize: 13,
   },
   rowContainer: {
     flexDirection: "row",
@@ -1881,18 +2035,44 @@ const styles = StyleSheet.create({
   paymentMethodContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    fontSize: 10,
+    fontSize: 12,
+    borderTopColor: "#ccc",
+    borderTopWidth: 1,
+    paddingTop: 10,
+    
   },
   paymentButton: {
     padding: 10,
     borderRadius: 5,
     borderWidth: 1,
     borderColor: "#ccc",
-    fontSize: 10,
+    fontSize: 12,
+  },
+  paymentButtonDis: {
+    padding: 10,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    height: 40,
+
+
   },
   selectedPayment: {
     backgroundColor: "#007bff",
     borderColor: "#007bff",
+  },
+  selectedPaymentDis: {
+    backgroundColor: "#007bff",
+    borderColor: "#007bff",
+  },
+  paymentInputDis: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    padding: 10,
+    marginVertical: 10,
+    fontSize: 10,
+    width: "70%",
   },
   paymentInput: {
     borderWidth: 1,
@@ -1900,7 +2080,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     marginVertical: 10,
-    fontSize: 10,
+    fontSize: 12,
   },
   confirmButton: {
     backgroundColor: "#28a745",
@@ -1908,14 +2088,16 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignItems: "center",
     marginTop: 10,
+    zIndex: 20,
+    width: "100%",
   },
   confirmButtonText: {
     color: "white",
     fontWeight: "semibold",
-    fontSize: 12,
+    fontSize: 13,
   },
   semiBold: {
-    fontSize: 10,
+    fontSize: 12,
   },
   orderDetailRow: {
     justifyContent: "space-between",
@@ -1936,17 +2118,17 @@ const styles = StyleSheet.create({
     maxHeight: "80%",
   },
   modalTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "bold",
     marginBottom: 10,
     textAlign: "center",
   },
   modalText: {
-    fontSize: 10,
+    fontSize: 12,
     marginBottom: 5,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "bold",
     marginTop: 10,
     borderBottomWidth: 1,
@@ -1960,7 +2142,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   orderText: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#333",
     marginLeft: 5,
   },
@@ -1971,13 +2153,17 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   orderDetailText: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#555",
     flexDirection: "column",
   },
   bold: {
     fontWeight: "semibold",
-    fontSize: 10,
+    fontSize: 12,
+  },
+  boldDis:{
+    fontSize: 12,
+    width: "20%",
   },
   closeButton: {
     padding: 5,
@@ -2013,7 +2199,7 @@ const styles = StyleSheet.create({
 
   buttonText: {
     color: "white",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "bold",
   },
   appointmentContainer: {
@@ -2037,12 +2223,12 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   dayColumn: {
-    width: 60,
+    width: 70,
     marginRight: 10,
     backgroundColor: "#f5f5f5",
     borderRadius: 8,
     padding: 8,
-    marginTop: 4,
+    fontSize: 12,
   },
   timePickerButton: {
     padding: 10,
@@ -2054,19 +2240,19 @@ const styles = StyleSheet.create({
   },
   timePickerText: {
     color: "white",
-    fontSize: 10,
+    fontSize: 12,
   },
   errorText: {
     color: "red",
-    fontSize: 10,
+    fontSize: 12,
     textAlign: "center",
     marginTop: 10,
   },
   dayHeader: {
-    fontSize: 10,
+    fontSize: 12,
   },
   dateHeader: {
-    fontSize: 11,
+    fontSize: 13,
   },
   appointmentCard: {
     backgroundColor: "#f5f5f5",
@@ -2077,7 +2263,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   appointmentText: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#333",
   },
   agentListContainer: {
@@ -2085,30 +2271,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#ddd",
+    shadowColor: "#000",
     padding: 10,
+    flexDirection: "row",
   },
   agentListTitle: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#333",
     marginBottom: 4,
   },
   agentCard: {
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: 15,
     borderRadius: 8,
     marginRight: 10,
     alignItems: "center",
     backgroundColor: "#E1EBEE",
-    borderColor: "#007BFF",
-    borderWidth: 1,
+    borderRadius: 10,
   },
   agentName: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#007BFF",
-    marginBottom: 3,
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
   },
   agentNumber: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#007BFF",
   },
   selectedProductsContainer: {
@@ -2129,7 +2318,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#ddd",
   },
   selectedProductName: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "600",
     color: "#333",
     flex: 2,
@@ -2146,7 +2335,7 @@ const styles = StyleSheet.create({
   qtyInput: {
     width: 40,
     textAlign: "center",
-    fontSize: 10,
+    fontSize: 12,
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 5,
@@ -2155,7 +2344,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
   },
   selectedProductPrice: {
-    fontSize: 10,
+    fontSize: 12,
     flex: 1,
     textAlign: "right",
   },
@@ -2177,17 +2366,17 @@ const styles = StyleSheet.create({
   addDetails: {
     color: "#007BFF",
     fontWeight: "600",
-    fontSize: 10,
+    fontSize: 13,
   },
 
   savedDetails: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#555",
     marginTop: 5,
   },
 
   modalSubtitle: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#555",
     marginBottom: 15,
   },
@@ -2197,7 +2386,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     padding: 10,
     borderRadius: 8,
-    fontSize: 10,
+    fontSize: 12,
     backgroundColor: "#f9f9f9",
     marginBottom: 10,
   },
@@ -2209,6 +2398,6 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: "white",
-    fontSize: 10,
+    fontSize: 12,
   },
 });

@@ -33,10 +33,10 @@ const Footer = () => {
 
     fetchRole();
   }, []);
- 
+
   return (
     <View style={styles.footer}>
-     {role === "owner" && (
+      {role === "owner" && (
         <TouchableOpacity onPress={() => handleTabPress("/report")}>
           <View style={styles.footerItem}>
             <FontAwesome
@@ -44,13 +44,34 @@ const Footer = () => {
               size={17}
               color={pathname === "/report" ? "#007BFF" : "gray"}
             />
-            <Text style={[styles.text, pathname === "/report" && styles.selectedText]}>
+            <Text
+              style={[
+                styles.text,
+                pathname === "/report" && styles.selectedText,
+              ]}
+            >
               Home
             </Text>
           </View>
         </TouchableOpacity>
       )}
-
+      <TouchableOpacity onPress={() => handleTabPress("/customer")}>
+        <View style={styles.footerItem}>
+          <FontAwesome
+            name="user"
+            size={15}
+            color={pathname === "/customer" ? "#007BFF" : "gray"}
+          />
+          <Text
+            style={[
+              styles.text,
+              pathname === "/customer" && styles.selectedText,
+            ]}
+          >
+            customer
+          </Text>
+        </View>
+      </TouchableOpacity>
       <TouchableOpacity onPress={() => handleTabPress("/billing")}>
         <View style={styles.footerItem}>
           <FontAwesome
@@ -58,7 +79,12 @@ const Footer = () => {
             size={15}
             color={pathname === "/billing" ? "#007BFF" : "gray"}
           />
-          <Text style={[styles.text, pathname === "/billing" && styles.selectedText]}>
+          <Text
+            style={[
+              styles.text,
+              pathname === "/billing" && styles.selectedText,
+            ]}
+          >
             Billing
           </Text>
         </View>
@@ -71,12 +97,17 @@ const Footer = () => {
             size={15}
             color={pathname === "/appointment" ? "#007BFF" : "gray"}
           />
-          <Text style={[styles.text, pathname === "/appointment" && styles.selectedText]}>
+          <Text
+            style={[
+              styles.text,
+              pathname === "/appointment" && styles.selectedText,
+            ]}
+          >
             Appointment
           </Text>
         </View>
       </TouchableOpacity>
-      
+
       <TouchableOpacity onPress={handleLogout}>
         <View style={styles.footerItem}>
           <FontAwesome
