@@ -26,7 +26,7 @@ const supabaseAnonKey =
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export default function Billing() {
+export default function OwnerBilling() {
   const [savedRecipient, setSavedRecipient] = useState(null);
   const [products, setProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
@@ -205,41 +205,57 @@ export default function Billing() {
     }
   }, [selectedAgent, selectedDateTime?.date]); // Trigger on agent/date change
 
-  useEffect(() => {
-    const fetchLoggedInAgent = async () => {
-      const agentId = await AsyncStorage.getItem("@agentId");
-      if (!agentId) return;
+  // useEffect(() => {
+  //   const fetchLoggedInAgent = async () => {
+  //     const agentId = await AsyncStorage.getItem("@agentId");
+  //     if (!agentId) return;
   
+  //     try {
+  //       const { data, error } = await supabase
+  //         .from("Agents")
+  //         .select("id, full_name, mobile_number")
+  //         .eq("id", agentId)
+  //         .single();
+  
+  //       if (error) throw error;
+  
+  //       setAgents(data ? [data] : []);
+  //       // Automatically select the logged-in agent
+  //       setSelectedAgent(data);
+  //       // Set default date to today
+  //       const today = new Date().toISOString().split("T")[0];
+  //       setSelectedDateTime({
+  //         date: today,
+  //         startTime: "",
+  //         endTime: "",
+  //         status: "Booked",
+  //       });
+  //       // Fetch appointments for today
+  //       fetchAppointments(data.id, today);
+  //     } catch (error) {
+  //       console.error("Error fetching agent:", error.message);
+  //     }
+  //   };
+  
+  //   fetchLoggedInAgent();
+  // }, []);
+    const fetchAgents = async () => {
       try {
         const { data, error } = await supabase
           .from("Agents")
-          .select("id, full_name, mobile_number")
-          .eq("id", agentId)
-          .single();
+          .select("id,full_name, mobile_number");
   
         if (error) throw error;
   
-        setAgents(data ? [data] : []);
-        // Automatically select the logged-in agent
-        setSelectedAgent(data);
-        // Set default date to today
-        const today = new Date().toISOString().split("T")[0];
-        setSelectedDateTime({
-          date: today,
-          startTime: "",
-          endTime: "",
-          status: "Booked",
-        });
-        // Fetch appointments for today
-        fetchAppointments(data.id, today);
+        setAgents(data);
       } catch (error) {
-        console.error("Error fetching agent:", error.message);
+        console.error("Error fetching agents:", error.message);
       }
     };
   
-    fetchLoggedInAgent();
-  }, []);
-  
+    useEffect(() => {
+      fetchAgents();
+    }, []);
   const fetchLatestUser = async () => {
     try {
       // First, check if there's a saved recipient in AsyncStorage
@@ -1037,17 +1053,78 @@ export default function Billing() {
   return (
     <>
       <View style={{ padding: 10 }}>
+      <View style={styles.agentListContainer}>
+          <FlatList
+            data={agents}
+            keyExtractor={(item) => item.mobile_number}
+            horizontal
+            showsHorizontalScrollIndicator={true} // Enable Scroll Indicator
+            renderItem={({ item }) => {
+              const isSelected = selectedAgent?.id === item.id; // Check if agent is selected
+
+              return (
+                <TouchableOpacity
+                  onPress={async () => {
+                    setSelectedAgent(item);
+                  }}
+                  onLongPress={async () => {
+                    setSelectedAgent(item);
+
+                    // Get today's date in "YYYY-MM-DD" format if no date is selected
+                    const defaultDate = new Date().toISOString().split("T")[0];
+                    const selectedDate = selectedDateTime?.date || defaultDate;
+
+                    console.log(
+                      "Fetching for Agent:",
+                      item.id,
+                      "on Date:",
+                      selectedDate
+                    );
+
+                    await fetchAppointments(item.id, selectedDate); // ✅ Pass a valid date
+
+                    setAgentCalendarModalVisible(true);
+                    setSelectedDateTime({
+                      date: selectedDate,
+                      startTime: "",
+                      endTime: "",
+                      status: "Booked",
+                    });
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.agentCard,
+                      isSelected && styles.selectedAgentCard, // Apply red background if selected
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.agentName,
+                        isSelected && styles.selectedAgentName, // Apply red background if selected
+                      ]}
+                    >
+                      {item.full_name}
+                    </Text>
+                  
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
         <View style={styles.agentListContainer}>
           {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
-    
+
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {generateWeekDatesForAppointments().map((item, index) => (
               <TouchableOpacity
                 key={index}
+                disabled={item.isUnavailable} // ✅ Disable click on unavailable dates
                 style={[
                   styles.dayColumn,
                   item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 }
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
                     : selectedDateTime?.date ===
                       item.date.toISOString().split("T")[0]
                     ? {
@@ -1058,13 +1135,9 @@ export default function Billing() {
                     : {},
                 ]}
                 onPress={() => {
-                  const selectedDate = item.date.toISOString().split("T")[0];
-
-                  if (item.isUnavailable) {
-                    handleUnavailableDateClick(selectedDate);
-                  } else {
+                  if (!item.isUnavailable) {
                     setSelectedDateTime({
-                      date: selectedDate,
+                      date: item.date.toISOString().split("T")[0],
                       startTime: "",
                       endTime: "",
                       status: "Booked",
@@ -1097,7 +1170,7 @@ export default function Billing() {
         </View>
 
         <View style={styles.appointmentContainer}>
-          <ScrollView style={{ height: 570 }}>
+          <ScrollView style={{ height: 520 }}>
             {appointments.length > 0 ? (
               <View style={{ marginTop: 3 }}>
                 <Text style={{ fontSize: 12, marginLeft: 5 }}>

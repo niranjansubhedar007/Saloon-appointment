@@ -25,7 +25,7 @@ const supabaseAnonKey =
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export default function Appointment() {
+export default function OwnerAppointment() {
   const [modalVisible, setModalVisible] = useState(false);
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [recipientName, setRecipientName] = useState("");
@@ -483,45 +483,23 @@ export default function Appointment() {
     }
   };
 
+  const fetchAgents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("Agents")
+        .select("id,full_name, mobile_number");
+
+      if (error) throw error;
+
+      setAgents(data);
+    } catch (error) {
+      console.error("Error fetching agents:", error.message);
+    }
+  };
+
   useEffect(() => {
-    const fetchLoggedInAgent = async () => {
-      const agentId = await AsyncStorage.getItem("@agentId");
-      if (!agentId) return;
-
-      try {
-        const { data, error } = await supabase
-          .from("Agents")
-          .select("id, full_name, mobile_number")
-          .eq("id", agentId)
-          .single();
-
-        if (error) throw error;
-
-        setAgents(data ? [data] : []);
-        // Automatically select the logged-in agent
-        setSelectedAgent(data);
-        // Set default date to today
-        const today = new Date().toISOString().split("T")[0];
-        setSelectedDateTime({
-          date: today,
-          startTime: "",
-          endTime: "",
-          status: "Booked",
-        });
-        // Fetch appointments for today
-        fetchAppointments(data.id, today);
-      } catch (error) {
-        console.error("Error fetching agent:", error.message);
-      }
-    };
-
-    fetchLoggedInAgent();
+    fetchAgents();
   }, []);
-
-
-
-
-
 
   const capitalizeWords = (text) =>
     text
@@ -1039,6 +1017,66 @@ export default function Appointment() {
           </View>
         )}
         <View style={styles.agentListContainer}>
+          <FlatList
+            data={agents}
+            keyExtractor={(item) => item.mobile_number}
+            horizontal
+            showsHorizontalScrollIndicator={true} // Enable Scroll Indicator
+            renderItem={({ item }) => {
+              const isSelected = selectedAgent?.id === item.id; // Check if agent is selected
+
+              return (
+                <TouchableOpacity
+                  onPress={async () => {
+                    setSelectedAgent(item);
+                  }}
+                  onLongPress={async () => {
+                    setSelectedAgent(item);
+
+                    // Get today's date in "YYYY-MM-DD" format if no date is selected
+                    const defaultDate = new Date().toISOString().split("T")[0];
+                    const selectedDate = selectedDateTime?.date || defaultDate;
+
+                    console.log(
+                      "Fetching for Agent:",
+                      item.id,
+                      "on Date:",
+                      selectedDate
+                    );
+
+                    await fetchAppointments(item.id, selectedDate); // ✅ Pass a valid date
+
+                    setAgentCalendarModalVisible(true);
+                    setSelectedDateTime({
+                      date: selectedDate,
+                      startTime: "",
+                      endTime: "",
+                      status: "Booked",
+                    });
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.agentCard,
+                      isSelected && styles.selectedAgentCard, // Apply red background if selected
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.agentName,
+                        isSelected && styles.selectedAgentName, // Apply red background if selected
+                      ]}
+                    >
+                      {item.full_name}
+                    </Text>
+                  
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+        <View style={styles.agentListContainer}>
           {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1093,9 +1131,9 @@ export default function Appointment() {
             ))}
           </ScrollView>
         </View>
-   
+    
         <View style={styles.appointmentContainer}>
-          <ScrollView style={{ height: 350 }}>
+          <ScrollView style={{ height: 270 }}>
             {appointments.length > 0 ? (
               <View style={{ marginTop: 3 }}>
                 <Text style={{ fontSize: 12, marginLeft: 5 }}>

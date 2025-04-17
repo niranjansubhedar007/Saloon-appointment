@@ -40,7 +40,7 @@ const Footer = () => {
         <TouchableOpacity onPress={() => handleTabPress("/report")}>
           <View style={styles.footerItem}>
             <FontAwesome
-              name="home"
+              name="dollar"
               size={17}
               color={pathname === "/report" ? "#007BFF" : "gray"}
             />
@@ -50,7 +50,7 @@ const Footer = () => {
                 pathname === "/report" && styles.selectedText,
               ]}
             >
-              Home
+              Sale
             </Text>
           </View>
         </TouchableOpacity>
@@ -72,35 +72,59 @@ const Footer = () => {
           </Text>
         </View>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleTabPress("/billing")}>
-        <View style={styles.footerItem}>
-          <FontAwesome
-            name="bell"
-            size={15}
-            color={pathname === "/billing" ? "#007BFF" : "gray"}
-          />
-          <Text
-            style={[
-              styles.text,
-              pathname === "/billing" && styles.selectedText,
-            ]}
-          >
-            Billing
-          </Text>
-        </View>
-      </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => handleTabPress("/appointment")}>
+      <TouchableOpacity
+        onPress={() =>
+          handleTabPress(
+            role === "owner" ? "/ownerBilling" : "/billing"
+          )
+        }
+      >
         <View style={styles.footerItem}>
           <FontAwesome
             name="table"
             size={15}
-            color={pathname === "/appointment" ? "#007BFF" : "gray"}
+            color={
+              pathname === "/billing" || pathname === "/ownerBilling"
+                ? "#007BFF"
+                : "gray"
+            }
           />
           <Text
             style={[
               styles.text,
-              pathname === "/appointment" && styles.selectedText,
+              (pathname === "/billing" ||
+                pathname === "/ownerBilling") &&
+                styles.selectedText,
+            ]}
+          >
+            billing
+          </Text>
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() =>
+          handleTabPress(
+            role === "owner" ? "/ownerAppointment" : "/appointment"
+          )
+        }
+      >
+        <View style={styles.footerItem}>
+          <FontAwesome
+            name="table"
+            size={15}
+            color={
+              pathname === "/appointment" || pathname === "/ownerAppointment"
+                ? "#007BFF"
+                : "gray"
+            }
+          />
+          <Text
+            style={[
+              styles.text,
+              (pathname === "/appointment" ||
+                pathname === "/ownerAppointment") &&
+                styles.selectedText,
             ]}
           >
             Appointment
