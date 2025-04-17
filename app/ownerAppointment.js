@@ -485,17 +485,37 @@ export default function OwnerAppointment() {
 
   const fetchAgents = async () => {
     try {
+      const today = new Date().toISOString().split("T")[0];
+      console.log("Fetching agents for date:", today);
+  
       const { data, error } = await supabase
         .from("Agents")
-        .select("id,full_name, mobile_number");
-
+        .select("id, full_name, mobile_number");
+  
       if (error) throw error;
-
+  
       setAgents(data);
+  
+      // ✅ Auto-select the first agent (index 0) if at least one exists
+      if (data.length > 0) {
+        const firstAgent = data[0];
+        setSelectedAgent(firstAgent);
+  
+        setSelectedDateTime({
+          date: today,
+          startTime: "",
+          endTime: "",
+          status: "Booked",
+        });
+  
+        await fetchAppointments(firstAgent.id, today);
+      }
+  
     } catch (error) {
       console.error("Error fetching agents:", error.message);
     }
   };
+  
 
   useEffect(() => {
     fetchAgents();
@@ -1069,7 +1089,6 @@ export default function OwnerAppointment() {
                     >
                       {item.full_name}
                     </Text>
-                  
                   </View>
                 </TouchableOpacity>
               );
@@ -1131,7 +1150,7 @@ export default function OwnerAppointment() {
             ))}
           </ScrollView>
         </View>
-    
+
         <View style={styles.appointmentContainer}>
           <ScrollView style={{ height: 270 }}>
             {appointments.length > 0 ? (
@@ -1735,13 +1754,14 @@ const styles = StyleSheet.create({
   },
 
   semiBold: {
-    fontWeight: "600",
+    fontSize: 12,
   },
   addDetails: {
     color: "#007BFF",
     fontWeight: "600",
     fontSize: 12,
     marginLeft: 5,
+
   },
   savedDetails: {
     fontSize: 13,

@@ -518,11 +518,6 @@ export default function Appointment() {
     fetchLoggedInAgent();
   }, []);
 
-
-
-
-
-
   const capitalizeWords = (text) =>
     text
       .toLowerCase()
@@ -1093,7 +1088,7 @@ export default function Appointment() {
             ))}
           </ScrollView>
         </View>
-   
+
         <View style={styles.appointmentContainer}>
           <ScrollView style={{ height: 350 }}>
             {appointments.length > 0 ? (
@@ -1697,7 +1692,8 @@ const styles = StyleSheet.create({
   },
 
   semiBold: {
-    fontWeight: "600",
+    fontSize: 12,
+
   },
   addDetails: {
     color: "#007BFF",

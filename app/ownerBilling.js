@@ -239,19 +239,67 @@ export default function OwnerBilling() {
   
   //   fetchLoggedInAgent();
   // }, []);
-    const fetchAgents = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("Agents")
-          .select("id,full_name, mobile_number");
+
+
+  const fetchAgents = async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      console.log("Fetching agents for date:", today);
   
-        if (error) throw error;
+      const { data, error } = await supabase
+        .from("Agents")
+        .select("id, full_name, mobile_number");
   
-        setAgents(data);
-      } catch (error) {
-        console.error("Error fetching agents:", error.message);
+      if (error) throw error;
+  
+      setAgents(data);
+  
+      // ✅ Auto-select the first agent (index 0) if at least one exists
+      if (data.length > 0) {
+        const firstAgent = data[0];
+        setSelectedAgent(firstAgent);
+  
+        setSelectedDateTime({
+          date: today,
+          startTime: "",
+          endTime: "",
+          status: "Booked",
+        });
+  
+        await fetchAppointments(firstAgent.id, today);
       }
-    };
+  
+    } catch (error) {
+      console.error("Error fetching agents:", error.message);
+    }
+  };
+  
+
+
+  
+  // const fetchAgents = async () => {
+  //   try {
+  //     // Get current date in YYYY-MM-DD format
+  //     const today = new Date().toISOString().split("T")[0];
+  //     console.log("Fetching agents for date:", today);
+  
+  //     const { data, error } = await supabase
+  //       .from("Agents")
+  //       .select("id, full_name, mobile_number");
+  
+  //     if (error) throw error;
+  
+  //     setAgents(data);
+      
+  //     // You can use 'today' here if you want to filter or log something
+  //     // For example:
+  //     // fetchAppointmentsForAllAgents(data, today);
+      
+  //   } catch (error) {
+  //     console.error("Error fetching agents:", error.message);
+  //   }
+  // };
+  
   
     useEffect(() => {
       fetchAgents();

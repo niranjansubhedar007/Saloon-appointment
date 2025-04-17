@@ -55,24 +55,36 @@ const Footer = () => {
           </View>
         </TouchableOpacity>
       )}
-      <TouchableOpacity onPress={() => handleTabPress("/customer")}>
+
+      <TouchableOpacity
+        onPress={() =>
+          handleTabPress(
+            role === "owner" ? "/ownerCustomer" : "/customer"
+          )
+        }
+      >
         <View style={styles.footerItem}>
           <FontAwesome
             name="user"
             size={15}
-            color={pathname === "/customer" ? "#007BFF" : "gray"}
+            color={
+              pathname === "/customer" || pathname === "/ownerCustomer"
+                ? "#007BFF"
+                : "gray"
+            }
           />
           <Text
             style={[
               styles.text,
-              pathname === "/customer" && styles.selectedText,
+              (pathname === "/customer" ||
+                pathname === "/ownerCustomer") &&
+                styles.selectedText,
             ]}
           >
             customer
           </Text>
         </View>
       </TouchableOpacity>
-
       <TouchableOpacity
         onPress={() =>
           handleTabPress(
@@ -82,7 +94,7 @@ const Footer = () => {
       >
         <View style={styles.footerItem}>
           <FontAwesome
-            name="table"
+            name="money"
             size={15}
             color={
               pathname === "/billing" || pathname === "/ownerBilling"
@@ -111,7 +123,7 @@ const Footer = () => {
       >
         <View style={styles.footerItem}>
           <FontAwesome
-            name="table"
+            name="clipboard"
             size={15}
             color={
               pathname === "/appointment" || pathname === "/ownerAppointment"

@@ -543,7 +543,7 @@ const Report = () => {
                         textAlign: "center",
                       }}
                     >
-              Handle by {getAgentName(selectedAgentId)}
+                      Handle by {getAgentName(selectedAgentId)}
                     </Text>
                   )}
                   {/* Render each order detail */}
@@ -641,14 +641,14 @@ const styles = StyleSheet.create({
   },
 
   totalLabel: {
-    fontSize: 25,
+    fontSize: 30,
     fontWeight: "bold",
     marginLeft: 10,
     color: "#007bff",
   },
 
   totalAmount: {
-    fontSize: 25,
+    fontSize: 30,
     fontWeight: "bold",
     color: "#007bff",
     marginRight: 10,
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
   },
 
   paymentAmount: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "bold",
     color: "#28a745",
     marginTop: 4,

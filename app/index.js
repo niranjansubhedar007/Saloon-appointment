@@ -205,14 +205,7 @@ export default function Index() {
           <Text style={styles.buttonText}>Sign in with Google</Text>
         </TouchableOpacity>
       </View>
-{/* <View style={{position:"absolute", top:30, right:10}}>
-      <FontAwesome
-        name="gear"
-        color="gray"
-        size={24}
-        onPress={() => setModalVisible(true)}
-      />
-</View> */}
+
       <Modal animationType="slide" transparent={true} visible={modalVisible}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>

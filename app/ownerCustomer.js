@@ -21,7 +21,7 @@ const supabaseAnonKey =
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export default function Customer() {
+export default function OwnerCustomer() {
   const [inactiveUsers, setInactiveUsers] = useState([]);
   const [archivedUsers, setArchivedUsers] = useState([]);
   const [activeUsers, setActiveUsers] = useState([]);
@@ -75,27 +75,28 @@ export default function Customer() {
 
       for (const userId in userAppointmentsMap) {
         const allUserApps = userAppointmentsMap[userId];
-      
-        // 👉 if an agent is selected, don't show any customers
-        if (selectedAgents.length > 0) {
-          continue;
-        }
-      
+
         const latestAppointment = allUserApps.reduce((latest, current) =>
           new Date(current.appointment_date) > new Date(latest.appointment_date)
             ? current
             : latest
         );
-      
+
+        const hasSelectedAgentApp =
+          selectedAgents.length === 0 ||
+          allUserApps.some((a) => a.agent_id === selectedAgents[0]);
+
+        if (!hasSelectedAgentApp) continue;
+
         const user = users.find((u) => u.id === Number(userId));
         if (!user) continue;
-      
+
         const userEntry = {
           ...user,
           lastAppointmentDate: formatDate(latestAppointment.appointment_date),
           lastAppointmentId: latestAppointment.id,
         };
-      
+
         if (latestAppointment.is_archive) {
           archivedUsers.push(userEntry);
         } else if (
@@ -106,7 +107,6 @@ export default function Customer() {
           activeUsers.push(userEntry);
         }
       }
-      
 
       setActiveUsers(activeUsers);
       setInactiveUsers(inactiveUsers);
@@ -122,40 +122,26 @@ export default function Customer() {
     fetchAppointments();
   }, [selectedAgents]);
 
-  useEffect(() => {
-    const fetchLoggedInAgent = async () => {
-      const agentId = await AsyncStorage.getItem("@agentId");
-      if (!agentId) return;
 
+
+
+
+
+    const fetchAgents = async () => {
       try {
-        const { data, error } = await supabase
-          .from("Agents")
-          .select("id, full_name, mobile_number")
-          .eq("id", agentId)
-          .single();
-
-        if (error) throw error;
-
-        setAgents(data ? [data] : []);
-        // Automatically select the logged-in agent
-        setSelectedAgents(data);
-        // Set default date to today
-        const today = new Date().toISOString().split("T")[0];
-   
-        // Fetch appointments for today
-        fetchAppointments(data.id, today);
+        const res = await fetch(API_AGENTS, {
+          headers: { apikey: API_KEY },
+        });
+        const data = await res.json();
+        setAgents(data);
       } catch (error) {
-        console.error("Error fetching agent:", error.message);
+        console.error("Error fetching agents:", error.message);
       }
     };
-
-    fetchLoggedInAgent();
-  }, []);
-
-
-
-
-
+  
+    useEffect(() => {
+      fetchAgents();
+    }, []);
   const updateArchiveStatus = async (appointmentId, isArchive) => {
     try {
       const res = await fetch(`${API_APPOINTMENTS}?id=eq.${appointmentId}`, {
@@ -194,7 +180,53 @@ export default function Customer() {
     ]);
   };
 
+  const AgentList = () => (
+    <View style={styles.agentListContainer}>
+      <Text style={{ fontSize: 11, marginBottom: 10, marginLeft: 3 }}>
+        Choose Professional
+      </Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <TouchableOpacity
+          style={[
+            styles.agentCard,
+            selectedAgents.length === 0 && styles.selectedAgentCard,
+          ]}
+          onPress={() => setSelectedAgents([])}
+        >
+          <Text
+            style={[
+              styles.agentName,
+              selectedAgents.length === 0 && styles.selectedAgentName,
+            ]}
+          >
+            All
+          </Text>
+        </TouchableOpacity>
 
+        {agents.map((agent) => {
+          const isSelected = selectedAgents[0] === agent.id;
+          return (
+            <TouchableOpacity
+              key={agent.id}
+              style={[styles.agentCard, isSelected && styles.selectedAgentCard]}
+              onPress={() => {
+                setSelectedAgents([agent.id]);
+              }}
+            >
+              <Text
+                style={[
+                  styles.agentName,
+                  isSelected && styles.selectedAgentName,
+                ]}
+              >
+                {agent.full_name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 
   const getDisplayedUsers = () => {
     switch (viewMode) {
@@ -254,59 +286,61 @@ export default function Customer() {
           </View>
         </View>
 
+        <AgentList />
         {loading ? (
           <ActivityIndicator size="large" color="#2196F3" />
         ) : (
-          <View style={{ height: 610  }}>
-          <FlatList
-            data={getDisplayedUsers()}
-            keyExtractor={(item) => item.id.toString()}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>No users found</Text>
-            }
-            renderItem={({ item }) => (
-              <View style={styles.itemContainer}>
-                <View style={styles.card}>
-                  <Text style={styles.userName}>{item.full_name}</Text>
-                  <Text style={styles.userInfo}>{item.mobile_number}</Text>
-                  <Text style={styles.userInfo}>
-                    Last Visit: {item.lastAppointmentDate || "N/A"}
-                  </Text>
-                </View>
-                <View style={{ justifyContent: "center", gap: 8 }}>
-                  {viewMode !== "active" && (
+          <View style={{ height: 520 }}>
+            <FlatList
+              data={getDisplayedUsers()}
+              keyExtractor={(item) => item.id.toString()}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No users found</Text>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.itemContainer}>
+                  <View style={styles.card}>
+                    <Text style={styles.userName}>{item.full_name}</Text>
+                    <Text style={styles.userInfo}>{item.mobile_number}</Text>
+                    <Text style={styles.userInfo}>
+                      Last Visit: {item.lastAppointmentDate || "N/A"}
+                    </Text>
+                  </View>
+                  <View style={{ justifyContent: "center", gap: 8 }}>
+                    {viewMode !== "active" && (
+                      <TouchableOpacity
+                        style={[
+                          styles.iconButton,
+                          viewMode === "archived"
+                            ? styles.unarchiveButton
+                            : styles.archiveButton,
+                        ]}
+                        onPress={() =>
+                          viewMode === "archived"
+                            ? handleUnarchive(item)
+                            : handleArchive(item)
+                        }
+                      >
+                        <FontAwesome
+                          name={viewMode === "archived" ? "eye-slash" : "eye"}
+                          size={16}
+                          color="white"
+                        />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
-                      style={[
-                        styles.iconButton,
-                        viewMode === "archived"
-                          ? styles.unarchiveButton
-                          : styles.archiveButton,
-                      ]}
+                      style={[styles.iconButton, styles.callButton]}
                       onPress={() =>
-                        viewMode === "archived"
-                          ? handleUnarchive(item)
-                          : handleArchive(item)
+                        Linking.openURL(`tel:${item.mobile_number}`)
                       }
                     >
-                      <FontAwesome
-                        name={viewMode === "archived" ? "eye-slash" : "eye"}
-                        size={16}
-                        color="white"
-                      />
+                      <FontAwesome name="phone" size={16} color="white" />
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    style={[styles.iconButton, styles.callButton]}
-                    onPress={() => Linking.openURL(`tel:${item.mobile_number}`)}
-                  >
-                    <FontAwesome name="phone" size={16} color="white" />
-                  </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            )}
-          />
-        </View>
-        
+              )}
+            />
+          </View>
         )}
       </View>
       <Footer />
