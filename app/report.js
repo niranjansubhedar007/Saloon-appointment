@@ -457,8 +457,8 @@ const Report = () => {
                   {getUserFullName(item.user_id)}
                 </Text>
 
-                <Text style={{ width: "33%", fontSize: 11 }}>
-                  {formatTo12Hour(item.start_time)}{" "}
+                <Text style={{ width: "34%", fontSize: 11 }}>
+                  {formatTo12Hour(item.start_time)}{" "}-{" "}
                   {formatTo12Hour(item.end_time)}
                 </Text>
                 <View style={{ width: "13%" }}>

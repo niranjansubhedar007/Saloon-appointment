@@ -1176,9 +1176,9 @@ export default function OwnerBilling() {
                     : selectedDateTime?.date ===
                       item.date.toISOString().split("T")[0]
                     ? {
-                        backgroundColor: "#E1EBEE",
-                        borderColor: "black",
-                        borderWidth: 1,
+                      borderColor: "#007bff",
+                      borderWidth: 1,
+                      backgroundColor: "rgba(0,123,255,0.1)",
                       }
                     : {},
                 ]}
@@ -1196,16 +1196,30 @@ export default function OwnerBilling() {
                 <Text
                   style={[
                     styles.dayHeader,
-                    item.isUnavailable && { color: "gray" },
-                  ]}
+                    item.isUnavailable
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                    : selectedDateTime?.date ===
+                      item.date.toISOString().split("T")[0]
+                    ? {
+                      color: "#007bff",
+                      }
+                    : {},
+                ]}
                 >
                   {item.date.toLocaleDateString("en-US", { weekday: "short" })}
                 </Text>
                 <Text
                   style={[
                     styles.dateHeader,
-                    item.isUnavailable && { color: "gray" },
-                  ]}
+                    item.isUnavailable
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                    : selectedDateTime?.date ===
+                      item.date.toISOString().split("T")[0]
+                    ? {
+                      color: "#007bff",
+                      }
+                    : {},
+                ]}
                 >
                   {item.date.toLocaleDateString("en-US", {
                     month: "short",
@@ -2348,11 +2362,14 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   selectedAgentCard: {
-    borderColor: "blue",
-    borderWidth: 1.5,
+    borderColor: "#007bff",
+    borderWidth: 1,
+    backgroundColor: "rgba(0,123,255,0.1)",
+    borderRadius: 10,
+
   },
   selectedAgentName: {
-    color: "blue",
+    color: "#007bff",
   },
   selectedAgentNumber: {
     color: "blue",
@@ -2424,12 +2441,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
     alignItems: "center",
-    backgroundColor: "#E1EBEE",
     borderRadius: 10,
   },
   agentName: {
     fontSize: 12,
-    color: "#007BFF",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",

@@ -1051,9 +1051,9 @@ export default function Billing() {
                     : selectedDateTime?.date ===
                       item.date.toISOString().split("T")[0]
                     ? {
-                        backgroundColor: "#E1EBEE",
-                        borderColor: "black",
-                        borderWidth: 1,
+                      borderColor: "#007bff",
+                      borderWidth: 1,
+                      backgroundColor: "rgba(0,123,255,0.1)",
                       }
                     : {},
                 ]}
@@ -1075,16 +1075,30 @@ export default function Billing() {
                 <Text
                   style={[
                     styles.dayHeader,
-                    item.isUnavailable && { color: "gray" },
-                  ]}
+                    item.isUnavailable
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                    : selectedDateTime?.date ===
+                      item.date.toISOString().split("T")[0]
+                    ? {
+                      color: "#007bff",
+                      }
+                    : {},
+                ]}
                 >
                   {item.date.toLocaleDateString("en-US", { weekday: "short" })}
                 </Text>
                 <Text
                   style={[
                     styles.dateHeader,
-                    item.isUnavailable && { color: "gray" },
-                  ]}
+                    item.isUnavailable
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                    : selectedDateTime?.date ===
+                      item.date.toISOString().split("T")[0]
+                    ? {
+                      color: "#007bff",
+                      }
+                    : {},
+                ]}
                 >
                   {item.date.toLocaleDateString("en-US", {
                     month: "short",

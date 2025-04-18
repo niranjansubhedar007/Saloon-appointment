@@ -101,6 +101,13 @@ export default function OwnerAppointment() {
 
       Alert.alert("Success", "Appointment updated successfully");
       setEditingAppointment(null);
+      setIsSelectedAgent(false); // Close product modal after booking
+      setSelectedDateTime((prev) => ({
+        ...prev,
+        startTime: formattedStart,
+        endTime: formattedEnd,
+      }));
+
       if (selectedAgent && selectedDateTime?.date) {
         await fetchAppointments(selectedAgent.id, selectedDateTime.date);
       }
@@ -487,35 +494,33 @@ export default function OwnerAppointment() {
     try {
       const today = new Date().toISOString().split("T")[0];
       console.log("Fetching agents for date:", today);
-  
+
       const { data, error } = await supabase
         .from("Agents")
         .select("id, full_name, mobile_number");
-  
+
       if (error) throw error;
-  
+
       setAgents(data);
-  
+
       // ✅ Auto-select the first agent (index 0) if at least one exists
       if (data.length > 0) {
         const firstAgent = data[0];
         setSelectedAgent(firstAgent);
-  
+
         setSelectedDateTime({
           date: today,
           startTime: "",
           endTime: "",
           status: "Booked",
         });
-  
+
         await fetchAppointments(firstAgent.id, today);
       }
-  
     } catch (error) {
       console.error("Error fetching agents:", error.message);
     }
   };
-  
 
   useEffect(() => {
     fetchAgents();
@@ -842,8 +847,8 @@ export default function OwnerAppointment() {
             </Text>
             {savedRecipient && (
               <Text style={styles.savedDetails}>
-                {savedRecipient.full_name || "Unknown"} -{" "}
-                {savedRecipient.mobile_number || "Unknown"}
+                {savedRecipient.full_name || "Select Customer"} -{" "}
+                {savedRecipient.mobile_number || ""}
               </Text>
             )}
           </View>
@@ -1110,9 +1115,9 @@ export default function OwnerAppointment() {
                     : selectedDateTime?.date ===
                       item.date.toISOString().split("T")[0]
                     ? {
-                        backgroundColor: "#E1EBEE",
-                        borderColor: "black",
-                        borderWidth: 1,
+                    borderColor: "#007bff",
+                      borderWidth: 1,
+                      backgroundColor: "rgba(0,123,255,0.1)",
                       }
                     : {},
                 ]}
@@ -1130,16 +1135,30 @@ export default function OwnerAppointment() {
                 <Text
                   style={[
                     styles.dayHeader,
-                    item.isUnavailable && { color: "gray" },
-                  ]}
+                    item.isUnavailable
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                    : selectedDateTime?.date ===
+                      item.date.toISOString().split("T")[0]
+                    ? {
+                      color: "#007bff",
+                      }
+                    : {},
+                ]}
                 >
                   {item.date.toLocaleDateString("en-US", { weekday: "short" })}
                 </Text>
                 <Text
                   style={[
                     styles.dateHeader,
-                    item.isUnavailable && { color: "gray" },
-                  ]}
+                    item.isUnavailable
+                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                    : selectedDateTime?.date ===
+                      item.date.toISOString().split("T")[0]
+                    ? {
+                      color: "#007bff",
+                      }
+                    : {},
+                ]}
                 >
                   {item.date.toLocaleDateString("en-US", {
                     month: "short",
@@ -1152,7 +1171,7 @@ export default function OwnerAppointment() {
         </View>
 
         <View style={styles.appointmentContainer}>
-          <ScrollView style={{ height: 270 }}>
+          <ScrollView style={{ height: 290 }}>
             {appointments.length > 0 ? (
               <View style={{ marginTop: 3 }}>
                 <Text style={{ fontSize: 12, marginLeft: 5 }}>
@@ -1290,17 +1309,15 @@ export default function OwnerAppointment() {
                     </Text>
                     <TouchableOpacity
                       onPress={() => setShowStartPicker(true)}
-                      style={[styles.timePickerButton, { width: "auto" }]} // Increased width
+                      style={[styles.timePickerButton, { width: "auto" }]}
                     >
                       <Text style={styles.timePickerText}>
-                        {selectedDateTime?.startTime || "Select Start Time"}
+                        {selectedDateTime?.startTime
+                          ? convertTo12HourFormat(selectedDateTime.startTime)
+                          : "Select Start Time"}
                       </Text>
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 12 }}>
-                      {selectedDateTime?.startTime
-                        ? convertTo12HourFormat(selectedDateTime?.startTime)
-                        : "Not Selected"}{" "}
-                    </Text>
+
                     {showStartPicker && (
                       <DateTimePicker
                         value={startTime}
@@ -1323,19 +1340,16 @@ export default function OwnerAppointment() {
                       onPress={() => setShowEndPicker(true)}
                       style={[
                         styles.timePickerButton,
-                        { backgroundColor: "#28A745", width: "auto" }, // Increased width
+                        { backgroundColor: "#28A745", width: "auto" },
                       ]}
                     >
                       <Text style={styles.timePickerText}>
-                        {selectedDateTime?.endTime || "Select End Time"}
+                        {selectedDateTime?.endTime
+                          ? convertTo12HourFormat(selectedDateTime.endTime)
+                          : "Select End Time"}
                       </Text>
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 12 }}>
-                      {" "}
-                      {selectedDateTime?.endTime
-                        ? convertTo12HourFormat(selectedDateTime?.endTime)
-                        : "Not Selected"}
-                    </Text>
+
                     {showEndPicker && (
                       <DateTimePicker
                         value={endTime}
@@ -1384,14 +1398,16 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   confirmButton: {
-    backgroundColor: "#2196F3",
+    borderColor: "#007bff",
+    borderWidth: 1,
+    backgroundColor: "#E1EBEE",
+
     padding: 15,
     borderRadius: 5,
     alignItems: "center",
-    marginTop: 20,
   },
   confirmButtonText: {
-    color: "white",
+    color: "#007bff",
     fontWeight: "bold",
   },
   appointmentContainer: {
@@ -1403,11 +1419,13 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   selectedAgentCard: {
-    borderColor: "blue",
-    borderWidth: 1.5,
+    borderColor: "#007bff",
+    borderWidth: 1,
+    backgroundColor: "rgba(0,123,255,0.1)",
+
   },
   selectedAgentName: {
-    color: "blue",
+    color: "#007bff",
   },
   selectedAgentNumber: {
     color: "blue",
@@ -1427,6 +1445,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
     fontSize: 12,
+
   },
   timePickerButton: {
     padding: 10,
@@ -1529,19 +1548,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  confirmButton: {
-    backgroundColor: "#007BFF",
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 15,
-    alignItems: "center",
-  },
-  confirmButtonText: {
-    color: "white",
-    fontSize: 13,
-    fontWeight: "bold",
-  },
-
   orderContainer: {
     marginBottom: 10,
     paddingLeft: 9,
@@ -1618,12 +1624,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
     alignItems: "center",
-    backgroundColor: "#E1EBEE",
     borderRadius: 10,
+    backgroundColor: "#f5f5f5",
+    
   },
   agentName: {
     fontSize: 12,
-    color: "#007BFF",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
@@ -1761,7 +1767,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 12,
     marginLeft: 5,
-
   },
   savedDetails: {
     fontSize: 13,
