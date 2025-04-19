@@ -209,16 +209,16 @@ export default function OwnerBilling() {
   //   const fetchLoggedInAgent = async () => {
   //     const agentId = await AsyncStorage.getItem("@agentId");
   //     if (!agentId) return;
-  
+
   //     try {
   //       const { data, error } = await supabase
   //         .from("Agents")
   //         .select("id, full_name, mobile_number")
   //         .eq("id", agentId)
   //         .single();
-  
+
   //       if (error) throw error;
-  
+
   //       setAgents(data ? [data] : []);
   //       // Automatically select the logged-in agent
   //       setSelectedAgent(data);
@@ -236,74 +236,68 @@ export default function OwnerBilling() {
   //       console.error("Error fetching agent:", error.message);
   //     }
   //   };
-  
+
   //   fetchLoggedInAgent();
   // }, []);
-
 
   const fetchAgents = async () => {
     try {
       const today = new Date().toISOString().split("T")[0];
       console.log("Fetching agents for date:", today);
-  
+
       const { data, error } = await supabase
         .from("Agents")
         .select("id, full_name, mobile_number");
-  
+
       if (error) throw error;
-  
+
       setAgents(data);
-  
+
       // ✅ Auto-select the first agent (index 0) if at least one exists
       if (data.length > 0) {
         const firstAgent = data[0];
         setSelectedAgent(firstAgent);
-  
+
         setSelectedDateTime({
           date: today,
           startTime: "",
           endTime: "",
           status: "Booked",
         });
-  
+
         await fetchAppointments(firstAgent.id, today);
       }
-  
     } catch (error) {
       console.error("Error fetching agents:", error.message);
     }
   };
-  
 
-
-  
   // const fetchAgents = async () => {
   //   try {
   //     // Get current date in YYYY-MM-DD format
   //     const today = new Date().toISOString().split("T")[0];
   //     console.log("Fetching agents for date:", today);
-  
+
   //     const { data, error } = await supabase
   //       .from("Agents")
   //       .select("id, full_name, mobile_number");
-  
+
   //     if (error) throw error;
-  
+
   //     setAgents(data);
-      
+
   //     // You can use 'today' here if you want to filter or log something
   //     // For example:
   //     // fetchAppointmentsForAllAgents(data, today);
-      
+
   //   } catch (error) {
   //     console.error("Error fetching agents:", error.message);
   //   }
   // };
-  
-  
-    useEffect(() => {
-      fetchAgents();
-    }, []);
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
   const fetchLatestUser = async () => {
     try {
       // First, check if there's a saved recipient in AsyncStorage
@@ -793,6 +787,8 @@ export default function OwnerBilling() {
       setDiscountType("subtract");
       setModalVisible(false);
       await fetchAppointments(agentId, selectedDateTime.date);
+      setSavedRecipient({});
+      // const checkID = await AsyncStorage.removeItem("savedRecipient"); // Clear saved recipient
     } catch (error) {
       console.error("Payment error:", error.message);
       Alert.alert("Error", "Failed to process payment.");
@@ -1083,25 +1079,32 @@ export default function OwnerBilling() {
   useEffect(() => {
     if (paymentMethod && selectedOrder) {
       const selectedProductsTotal = selectedProducts
-        .filter(p => !orderDetails.some(d => d.menu_name === p.Name))
+        .filter((p) => !orderDetails.some((d) => d.menu_name === p.Name))
         .reduce((sum, p) => sum + p.quantity * p.Price, 0);
-  
+
       const discountValue = parseFloat(discountAmount || 0);
       const baseTotal = selectedOrder.grand_total + selectedProductsTotal;
-      const grandTotal = discountType === 'add' 
-        ? baseTotal + discountValue 
-        : baseTotal - discountValue;
-  
+      const grandTotal =
+        discountType === "add"
+          ? baseTotal + discountValue
+          : baseTotal - discountValue;
+
       setPaymentAmount(grandTotal.toFixed(2));
     }
-  }, [paymentMethod, selectedOrder, selectedProducts, discountAmount, discountType]);
+  }, [
+    paymentMethod,
+    selectedOrder,
+    selectedProducts,
+    discountAmount,
+    discountType,
+  ]);
   const toggleQrCode = () => {
     setShowQrCode(!showQrCode);
   };
   return (
     <>
       <View style={{ padding: 10 }}>
-      <View style={styles.agentListContainer}>
+        <View style={styles.agentListContainer}>
           <FlatList
             data={agents}
             keyExtractor={(item) => item.mobile_number}
@@ -1154,7 +1157,6 @@ export default function OwnerBilling() {
                     >
                       {item.full_name}
                     </Text>
-                  
                   </View>
                 </TouchableOpacity>
               );
@@ -1176,9 +1178,9 @@ export default function OwnerBilling() {
                     : selectedDateTime?.date ===
                       item.date.toISOString().split("T")[0]
                     ? {
-                      borderColor: "#007bff",
-                      borderWidth: 1,
-                      backgroundColor: "rgba(0,123,255,0.1)",
+                        borderColor: "#007bff",
+                        borderWidth: 1,
+                        backgroundColor: "rgba(0,123,255,0.1)",
                       }
                     : {},
                 ]}
@@ -1197,14 +1199,14 @@ export default function OwnerBilling() {
                   style={[
                     styles.dayHeader,
                     item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
+                      ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                      : selectedDateTime?.date ===
+                        item.date.toISOString().split("T")[0]
+                      ? {
+                          color: "#007bff",
+                        }
+                      : {},
+                  ]}
                 >
                   {item.date.toLocaleDateString("en-US", { weekday: "short" })}
                 </Text>
@@ -1212,14 +1214,14 @@ export default function OwnerBilling() {
                   style={[
                     styles.dateHeader,
                     item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
+                      ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                      : selectedDateTime?.date ===
+                        item.date.toISOString().split("T")[0]
+                      ? {
+                          color: "#007bff",
+                        }
+                      : {},
+                  ]}
                 >
                   {item.date.toLocaleDateString("en-US", {
                     month: "short",
@@ -1461,10 +1463,10 @@ export default function OwnerBilling() {
                 <Text style={{ color: "white", fontSize: 12 }}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.closeButton}
+                style={styles.closeBUtton}
                 onPress={() => setAgentCalendarModalVisible(false)}
               >
-                <FontAwesome name="times" color="red" size={15} />
+               <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1531,7 +1533,17 @@ export default function OwnerBilling() {
                   </View>
                   <View>
                     <Text
-                      style={[styles.text, { marginBottom: 2, paddingLeft: 2 , marginTop:5 , borderTopColor:"gray", borderTopWidth:1 ,paddingTop:5}]}
+                      style={[
+                        styles.text,
+                        {
+                          marginBottom: 2,
+                          paddingLeft: 2,
+                          marginTop: 5,
+                          borderTopColor: "gray",
+                          borderTopWidth: 1,
+                          paddingTop: 5,
+                        },
+                      ]}
                     >
                       <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
                       <Text
@@ -1748,20 +1760,26 @@ export default function OwnerBilling() {
                               ).toFixed(2)}
                             </Text> */}
 
-<Text style={styles.boldSecond}>
-  <Text style={styles.boldSecond}>Total:</Text> ₹ 
-  {(
-    (order.grand_total +
-    selectedProducts
-      .filter(p => !orderDetails.some(d => d.menu_name === p.Name))
-      .reduce((sum, p) => sum + p.quantity * p.Price, 0)
-    ) +
-    (discountType === 'add' 
-      ? parseFloat(discountAmount || 0) 
-      : -parseFloat(discountAmount || 0)
-    )
-  ).toFixed(2)}
-</Text>
+                            <Text style={styles.boldSecond}>
+                              <Text style={styles.boldSecond}>Total:</Text> ₹
+                              {(
+                                order.grand_total +
+                                selectedProducts
+                                  .filter(
+                                    (p) =>
+                                      !orderDetails.some(
+                                        (d) => d.menu_name === p.Name
+                                      )
+                                  )
+                                  .reduce(
+                                    (sum, p) => sum + p.quantity * p.Price,
+                                    0
+                                  ) +
+                                (discountType === "add"
+                                  ? parseFloat(discountAmount || 0)
+                                  : -parseFloat(discountAmount || 0))
+                              ).toFixed(2)}
+                            </Text>
                           </View>
                           <View style={styles.paymentMethodContainer}>
                             {["cash", "card", "online"].map((method) => (
@@ -1799,12 +1817,15 @@ export default function OwnerBilling() {
                               width: "100%",
                               justifyContent: "space-between",
                               alignItems: "center",
-
                             }}
                           >
                             <TextInput
                               style={styles.paymentInputDis}
-                              placeholder={  discountType === "add" ? "Add Amount" : "Discount Amount"}
+                              placeholder={
+                                discountType === "add"
+                                  ? "Add Amount"
+                                  : "Discount Amount"
+                              }
                               keyboardType="numeric"
                               value={discountAmount}
                               onChangeText={setDiscountAmount}
@@ -1813,8 +1834,7 @@ export default function OwnerBilling() {
                               style={{
                                 flexDirection: "row",
                                 justifyContent: "space-between",
-                                gap:10,
-                                
+                                gap: 10,
                               }}
                             >
                               <TouchableOpacity
@@ -2029,6 +2049,17 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 7,
   },
+  closeBUtton: {
+    backgroundColor: "#ddd",
+    borderRadius: 8,
+    alignItems: "center",
+    padding: 10,
+    marginTop: 7,
+  },
+  cancelButtonText: {
+    color: "black",
+    fontSize: 12,
+  },
   counter: {
     position: "absolute",
     bottom: -5,
@@ -2191,7 +2222,6 @@ const styles = StyleSheet.create({
     borderTopColor: "#ccc",
     borderTopWidth: 1,
     paddingTop: 10,
-    
   },
   paymentButton: {
     padding: 10,
@@ -2206,8 +2236,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
     height: 40,
-
-
   },
   selectedPayment: {
     backgroundColor: "#007bff",
@@ -2313,7 +2341,7 @@ const styles = StyleSheet.create({
     fontWeight: "semibold",
     fontSize: 12,
   },
-  boldDis:{
+  boldDis: {
     fontSize: 12,
     width: "20%",
   },
@@ -2366,7 +2394,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: "rgba(0,123,255,0.1)",
     borderRadius: 10,
-
   },
   selectedAgentName: {
     color: "#007bff",

@@ -29,11 +29,11 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "owner": "niranjansubhedar",
     "extra": {
       "eas": {
-        "projectId": "2650f3f4-d60a-4cb8-b7ca-87c1191cc510"
+        "projectId": "fc70472e-ae15-43ac-96aa-338fc4b2583a"
       }
-    },
-    "owner": "niranjan-subhedar-0007"
+    }
   }
 }

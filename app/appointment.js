@@ -959,12 +959,7 @@ export default function Appointment() {
           >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <TouchableOpacity
-                  style={styles.closeIconContainer}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <FontAwesome name="close" size={20} color="red" />
-                </TouchableOpacity>
+           
 
                 <Text style={styles.modalTitle}>Booking for someone else</Text>
                 <Text style={styles.modalSubtitle}>
@@ -1010,6 +1005,12 @@ export default function Appointment() {
                   onPress={handleAddDetails}
                 >
                   <Text style={styles.addButtonText}>Add Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.closeBUtton}
+                  onPress={() => setModalVisible(false)}
+                >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1410,7 +1411,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
   },
-
+  closeBUtton: {
+    backgroundColor: "#ddd",
+    borderRadius: 8,
+    alignItems: "center",
+    padding: 10,
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    color: "black",
+    fontSize: 12,
+  },
   dayColumn: {
     width: 70,
     marginRight: 10,

@@ -575,10 +575,12 @@ export default function OwnerAppointment() {
       setUsers((prevUsers) => [...prevUsers, newRecipient]); // ✅ Update users list
       setSavedRecipient(newRecipient); // ✅ Update savedRecipient
 
-      await AsyncStorage.setItem(
+      const addData = await AsyncStorage.setItem(
         "savedRecipient",
         JSON.stringify(newRecipient)
-      ); // ✅ Store in AsyncStorage
+      );
+      setSavedRecipient(newRecipient);
+      console.log("savedRecipient", addData);
 
       Alert.alert("Success", "Recipient details added successfully!");
       setModalVisible(false);
@@ -588,11 +590,10 @@ export default function OwnerAppointment() {
       Alert.alert("Error", error.message);
     }
   };
-
   const selectRecipient = async (recipient) => {
     setRecipientName(recipient.full_name);
     setMobileNumber(recipient.mobile_number);
-    setFilteredRecipients([]); // Hide dropdown after selection
+    setFilteredRecipients([]);
 
     const recipientData = {
       id: recipient.id,
@@ -600,25 +601,57 @@ export default function OwnerAppointment() {
       mobile_number: recipient.mobile_number,
     };
 
-    // ✅ Update savedRecipient
-    setSavedRecipient(recipientData);
-
-    // ✅ Add the selected user to users state
-    setUsers((prevUsers) => {
-      const userExists = prevUsers.some((user) => user.id === recipient.id);
-      return userExists ? prevUsers : [...prevUsers, recipientData];
-    });
-    setModalVisible(false);
-    // ✅ Save to AsyncStorage
     try {
+      // ✅ Properly await the AsyncStorage operation
       await AsyncStorage.setItem(
         "savedRecipient",
         JSON.stringify(recipientData)
       );
+
+      // ✅ Now set the state AFTER successful storage
+      setSavedRecipient(recipientData);
+      console.log("Saved recipient:", recipientData); // Log the data directly
+
+      // Update users state
+      setUsers((prevUsers) => {
+        const userExists = prevUsers.some((user) => user.id === recipient.id);
+        return userExists ? prevUsers : [...prevUsers, recipientData];
+      });
     } catch (error) {
-      console.error("Error saving recipient:", error);
+      console.error("Failed to save recipient:", error);
     }
+
+    setModalVisible(false);
   };
+  // const selectRecipient = async (recipient) => {
+  //   setRecipientName(recipient.full_name);
+  //   setMobileNumber(recipient.mobile_number);
+  //   setFilteredRecipients([]); // Hide dropdown after selection
+
+  //   const recipientData = {
+  //     id: recipient.id,
+  //     full_name: recipient.full_name,
+  //     mobile_number: recipient.mobile_number,
+  //   };
+
+  //   console.log("recipientData", recipientData);
+
+  //   const saved = await AsyncStorage.setItem(
+  //     "savedRecipient",
+  //     JSON.stringify(recipientData)
+  //   );
+  //   setSavedRecipient(recipientData);
+  //   // ✅ Update savedRecipient
+  //   console.log("savedRecipient", saved);
+
+  //   // ✅ Add the selected user to users state
+  //   setUsers((prevUsers) => {
+  //     const userExists = prevUsers.some((user) => user.id === recipient.id);
+  //     return userExists ? prevUsers : [...prevUsers, recipientData];
+  //   });
+  //   setModalVisible(false);
+  //   // ✅ Save to AsyncStorage
+  // };
   const userMap = React.useMemo(() => {
     return users.reduce((acc, user) => {
       acc[user.id] = user.full_name;
@@ -638,7 +671,12 @@ export default function OwnerAppointment() {
       const savedData = await AsyncStorage.getItem("savedRecipient");
 
       if (savedData) {
-        setSavedRecipient(JSON.parse(savedData));
+        try {
+          const parsedData = JSON.parse(savedData);
+          setSavedRecipient(parsedData);
+        } catch (parseError) {
+          console.error("Error parsing saved recipient:", parseError);
+        }
         return;
       }
 
@@ -800,8 +838,6 @@ export default function OwnerAppointment() {
 
         if (error) throw error;
 
-        console.log("Filtered Data:", data); // ✅ Debugging log
-
         setFilteredRecipients(data || []);
       } catch (error) {
         console.error("Error fetching matching users:", error.message);
@@ -842,7 +878,7 @@ export default function OwnerAppointment() {
                   setFilteredRecipients([]); // ✅ Clear dropdown on modal open
                 }}
               >
-                ADD CUSTOMERS
+                ADD CUSTOMER
               </Text>
             </Text>
             {savedRecipient && (
@@ -925,13 +961,6 @@ export default function OwnerAppointment() {
           >
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <TouchableOpacity
-                  style={styles.closeIconContainer}
-                  onPress={() => setModalVisible(false)}
-                >
-                  <FontAwesome name="close" size={20} color="red" />
-                </TouchableOpacity>
-
                 <Text style={styles.modalTitle}>Booking for someone else</Text>
                 <Text style={styles.modalSubtitle}>
                   We will share booking details on recipient's mobile number.
@@ -976,6 +1005,12 @@ export default function OwnerAppointment() {
                   onPress={handleAddDetails}
                 >
                   <Text style={styles.addButtonText}>Add Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.closeBUtton}
+                  onPress={() => setModalVisible(false)}
+                >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1115,9 +1150,9 @@ export default function OwnerAppointment() {
                     : selectedDateTime?.date ===
                       item.date.toISOString().split("T")[0]
                     ? {
-                    borderColor: "#007bff",
-                      borderWidth: 1,
-                      backgroundColor: "rgba(0,123,255,0.1)",
+                        borderColor: "#007bff",
+                        borderWidth: 1,
+                        backgroundColor: "rgba(0,123,255,0.1)",
                       }
                     : {},
                 ]}
@@ -1136,14 +1171,14 @@ export default function OwnerAppointment() {
                   style={[
                     styles.dayHeader,
                     item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
+                      ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                      : selectedDateTime?.date ===
+                        item.date.toISOString().split("T")[0]
+                      ? {
+                          color: "#007bff",
+                        }
+                      : {},
+                  ]}
                 >
                   {item.date.toLocaleDateString("en-US", { weekday: "short" })}
                 </Text>
@@ -1151,14 +1186,14 @@ export default function OwnerAppointment() {
                   style={[
                     styles.dateHeader,
                     item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
+                      ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                      : selectedDateTime?.date ===
+                        item.date.toISOString().split("T")[0]
+                      ? {
+                          color: "#007bff",
+                        }
+                      : {},
+                  ]}
                 >
                   {item.date.toLocaleDateString("en-US", {
                     month: "short",
@@ -1422,7 +1457,6 @@ const styles = StyleSheet.create({
     borderColor: "#007bff",
     borderWidth: 1,
     backgroundColor: "rgba(0,123,255,0.1)",
-
   },
   selectedAgentName: {
     color: "#007bff",
@@ -1445,7 +1479,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
     fontSize: 12,
-
   },
   timePickerButton: {
     padding: 10,
@@ -1626,7 +1659,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 10,
     backgroundColor: "#f5f5f5",
-    
   },
   agentName: {
     fontSize: 12,
@@ -1766,7 +1798,9 @@ const styles = StyleSheet.create({
     color: "#007BFF",
     fontWeight: "600",
     fontSize: 12,
-    marginLeft: 5,
+    borderColor: "black",
+    borderWidth: 1,
+    padding: 5,
   },
   savedDetails: {
     fontSize: 13,
@@ -1847,6 +1881,17 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: "white",
+    fontSize: 12,
+  },
+  closeBUtton: {
+    backgroundColor: "#ddd",
+    borderRadius: 8,
+    alignItems: "center",
+    padding: 10,
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    color: "black",
     fontSize: 12,
   },
 });

@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import FontAwesome from "react-native-vector-icons/FontAwesome";
 import { useRouter, usePathname } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -15,16 +15,36 @@ const Footer = () => {
     router.push(route);
   };
   const handleLogout = async () => {
-    await AsyncStorage.removeItem("@token");
-    await AsyncStorage.removeItem("userName");
-    await AsyncStorage.removeItem("role");
-    await AsyncStorage.removeItem("waiter");
-    await AsyncStorage.removeItem("admin");
-    await AsyncStorage.removeItem("captain");
-    await GoogleSignin.signOut(); // Clear Google Sign-In session
-
-    router.push("/"); // Navigate to home on confirmation
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          onPress: () => console.log("Cancel pressed"),
+          style: "cancel",
+        },
+        {
+          text: "OK",
+          onPress: async () => {
+            await AsyncStorage.removeItem("@token");
+            await AsyncStorage.removeItem("userName");
+            await AsyncStorage.removeItem("role");
+            await AsyncStorage.removeItem("waiter");
+            await AsyncStorage.removeItem("admin");
+            await AsyncStorage.removeItem("captain");
+            await GoogleSignin.signOut(); // Clear Google Sign-In session
+  
+            router.push("/"); // Navigate to home on confirmation
+          },
+        },
+      ]
+    );
   };
+  
+
+
+
   useEffect(() => {
     const fetchRole = async () => {
       const storedRole = await AsyncStorage.getItem("@role");
