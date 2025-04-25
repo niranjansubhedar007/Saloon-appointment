@@ -27,7 +27,7 @@
       "package": "com.niranjansubhedar0007.myapp"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/images/adaptive-icon.png"
     },
     "owner": "niranjansubhedar",
     "extra": {

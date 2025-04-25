@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Image,
+  Pressable,
 } from "react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { useRouter } from "expo-router";
@@ -15,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { hideNavigationBar } from "react-native-navigation-bar-color";
 import { createClient } from "@supabase/supabase-js";
 import FontAwesome from "react-native-vector-icons/FontAwesome";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Initialize Supabase
 const supabaseUrl = "https://cqdinxweotvfamknmgap.supabase.co";
@@ -23,7 +25,6 @@ const supabaseAnonKey =
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-
 export default function Index() {
   const [modalVisible, setModalVisible] = useState(false);
   const [ipAddress, setIpAddress] = useState("");
@@ -31,22 +32,26 @@ export default function Index() {
   const [port, setPort] = useState("");
   const [billPort, setBillPort] = useState("");
   const router = useRouter();
-
+  const [userName, setUserName] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
   const handleSave = async () => {
     try {
       const { data: existingSettings } = await supabase
         .from("Setting")
         .select("id, key, value")
         .in("key", ["IP_address", "port", "bill_IP_address", "bill_port"]);
-  
+
       const settingsMap = existingSettings.reduce((acc, item) => {
         acc[item.key] = item;
         return acc;
       }, {});
-  
+
       const updates = [];
       const inserts = [];
-  
+
       // Function to check and update/insert setting
       const checkAndUpdate = (key, value) => {
         if (settingsMap[key]) {
@@ -55,12 +60,12 @@ export default function Index() {
           inserts.push({ key, value });
         }
       };
-  
+
       checkAndUpdate("IP_address", ipAddress);
       checkAndUpdate("port", port);
       checkAndUpdate("bill_IP_address", billIpAddress);
       checkAndUpdate("bill_port", billPort);
-  
+
       // Perform updates
       if (updates.length > 0) {
         await Promise.all(
@@ -69,12 +74,12 @@ export default function Index() {
           )
         );
       }
-  
+
       // Perform inserts
       if (inserts.length > 0) {
         await supabase.from("Setting").insert(inserts);
       }
-  
+
       Alert.alert("Success", "Settings updated successfully");
       setModalVisible(false);
     } catch (error) {
@@ -82,7 +87,7 @@ export default function Index() {
       console.error("Supabase error:", error);
     }
   };
-  
+
   useEffect(() => {
     GoogleSignin.configure({
       webClientId:
@@ -184,73 +189,116 @@ export default function Index() {
       console.error("Google Sign-In error:", error);
     }
   };
+  const handleLogin = async (e) => {
+    setError("");
+    setSuccess(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("Setting")
+        .select("key, value");
+
+      if (error) throw error;
+
+      const storedUser = data.find((item) => item.key === "username")?.value;
+      const storedPass = data.find((item) => item.key === "password")?.value;
+
+      if (userName === storedUser && password === storedPass) {
+        setSuccess(true);
+
+        // Save owner role to AsyncStorage
+        await AsyncStorage.setItem("@role", "owner");
+
+        // Optional: You might want to set a dummy agentId or fetch actual owner ID
+        await AsyncStorage.setItem("@agentId", "owner_id");
+Alert.alert("Success", "Welcome Owner!");
+        router.push("/report");
+      } else {
+        setError("Invalid username or password");
+      }
+    } catch (err) {
+      setError("Error fetching login info");
+    }
+  };
 
   return (
-    <>
-      <View style={styles.container}>
-        <Text style={styles.title}>Welcome</Text>
-        <Text style={styles.subtitle}>
-          Sign in to continue to your dashboard
-        </Text>
+    <LinearGradient colors={["#f3f4f6", "#e5e7eb"]} style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Manage your business efficiently</Text>
+
+        <View style={styles.form}>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor="#9ca3af"
+              value={userName}
+              onChangeText={setUserName}
+              autoCapitalize="none"
+            />
+            <FontAwesome name="user" size={20} color="#6b7280" />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <Pressable
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.passworsdToggle}
+            >
+              <FontAwesome
+                name={showPassword ? "eye-slash" : "eye"}
+                size={20}
+                color="#6b7280"
+              />
+            </Pressable>
+          </View>
+
+          {error && (
+            <View style={styles.errorContainer}>
+              <FontAwesome
+                name="exclamation-circle"
+                size={16}
+                color="#dc2626"
+              />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+            <Text style={styles.loginButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Google Sign-In Button */}
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
         <TouchableOpacity
           style={styles.googleButton}
           onPress={onGoogleButtonPress}
         >
           <Image
             source={{
-              uri: "https://cdn-teams-slug.flaticon.com/google.jpg",
+              uri: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png",
             }}
             style={styles.googleLogo}
           />
-          <Text style={styles.buttonText}>Sign in with Google</Text>
+          <Text style={styles.googleButtonText}>Continue with Google</Text>
         </TouchableOpacity>
-      </View>
 
-      <Modal animationType="slide" transparent={true} visible={modalVisible}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter IP Address & Port</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="IP Address"
-              value={ipAddress}
-              onChangeText={setIpAddress}
-            />
-                <TextInput
-              style={styles.input}
-              placeholder="Bill IP Address"
-              value={billIpAddress}
-              onChangeText={setBillIpAddress}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Port"
-              keyboardType="numeric"
-              value={port}
-              onChangeText={setPort}
-            />
-               <TextInput
-              style={styles.input}
-              placeholder="Bill Port"
-              keyboardType="numeric"
-              value={billPort}
-              onChangeText={setBillPort}
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.button} onPress={handleSave}>
-                <Text style={styles.buttonTexts}>Save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.buttonTexts}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </>
+        {/* Login Form */}
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -258,94 +306,120 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
+    padding: 20,
+  },
+  card: {
     backgroundColor: "white",
-    position: "relative",
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 30,
+    elevation: 5,
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 10,
+    fontSize: 25,
+    fontWeight: "700",
+    color: "#007bff",
+    textAlign: "center",
+    marginBottom: 5,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 30,
+    fontSize: 13,
+    color: "#6b7280",
     textAlign: "center",
-    paddingHorizontal: 20,
+    marginBottom: 30,
   },
   googleButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: "center",
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 20,
   },
   googleLogo: {
-    width: 30,
-    height: 30,
-    marginRight: 10,
+    width: 24,
+    height: 24,
+    marginRight: 12,
   },
-  buttonText: {
-    fontSize: 16,
-    color: "darkblue",
+  googleButtonText: {
+    fontSize: 13,
     fontWeight: "600",
+    color: "#1f2937",
   },
-  addButton: {
-    backgroundColor: "blue",
-    padding: 15,
-    borderRadius: 50,
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
   },
-  addButtonText: {
-    color: "white",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  modalContainer: {
+  dividerLine: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    height: 1,
+    backgroundColor: "#e5e7eb",
   },
-  modalContent: {
-    width: "80%",
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 10,
-    alignItems: "center",
+  dividerText: {
+    color: "#6b7280",
+    paddingHorizontal: 10,
+    fontSize: 13,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
+
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    width: "100%",
-    borderBottomWidth: 1,
-    marginBottom: 10,
+    flex: 1,
+    height: 50,
+    color: "#1f2937",
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  passwordToggle: {
     padding: 8,
   },
-  buttonContainer: {
-    flexDirection: "row",
+  loginButton: {
+    backgroundColor: "#3b82f6",
+    borderRadius: 12,
+    paddingVertical: 16,
     marginTop: 10,
   },
-  button: {
-    backgroundColor: "blue",
-    padding: 10,
-    borderRadius: 5,
-    marginHorizontal: 5,
-  },
-  cancelButton: {
-    backgroundColor: "red",
-  },
-  buttonTexts: {
+  loginButtonText: {
     color: "white",
-    fontWeight: "bold",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fee2e2",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  errorText: {
+    color: "#dc2626",
+    marginLeft: 8,
+    fontSize: 13,
+  },
+  successText: {
+    color: "#16a34a",
+    textAlign: "center",
+    marginTop: 10,
+    fontSize: 13,
   },
 });
