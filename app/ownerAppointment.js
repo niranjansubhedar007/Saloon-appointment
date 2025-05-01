@@ -11,6 +11,7 @@ import {
   Alert,
   ScrollView,
   Platform,
+  TouchableWithoutFeedback
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 
@@ -116,7 +117,37 @@ export default function OwnerAppointment() {
     }
   };
 
-  // Handle Start Time Selection
+  // // Handle Start Time Selection
+  // const handleStartTimeChange = (event, selectedTime) => {
+  //   setShowStartPicker(false);
+  //   if (selectedTime) {
+  //     const formattedTime = selectedTime.toLocaleTimeString("en-US", {
+  //       hour: "2-digit",
+  //       minute: "2-digit",
+  //       hour12: false, // Ensure 24-hour format
+  //     });
+
+  //     console.log("Formatted Start Time:", formattedTime);
+
+  //     setStartTime(selectedTime);
+  //     setSelectedDateTime((prev) => ({
+  //       ...prev,
+  //       startTime: formattedTime,
+  //     }));
+  //   }
+  // };
+  const calculateDuration = (start, end) => {
+    const diffMs = end - start;
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    return (
+      (hours > 0 ? `${hours} hr${hours > 1 ? "s" : ""} ` : "") +
+      (minutes > 0 ? `${minutes} min` : hours === 0 ? "0 min" : "")
+    );
+  };
+
   const handleStartTimeChange = (event, selectedTime) => {
     setShowStartPicker(false);
     if (selectedTime) {
@@ -128,10 +159,26 @@ export default function OwnerAppointment() {
 
       console.log("Formatted Start Time:", formattedTime);
 
+      // Calculate end time (1 hour later)
+      const endTime = new Date(selectedTime);
+      endTime.setHours(endTime.getHours() + 1);
+
+      const formattedEndTime = endTime.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
       setStartTime(selectedTime);
+      setEndTime(endTime); // Update end time state
+
+      const duration = calculateDuration(selectedTime, endTime);
+
       setSelectedDateTime((prev) => ({
         ...prev,
         startTime: formattedTime,
+        endTime: formattedEndTime,
+        duration, // save for display
       }));
     }
   };
@@ -181,11 +228,12 @@ export default function OwnerAppointment() {
       });
 
       console.log("Formatted End Time:", formattedTime);
-
+      const duration = calculateDuration(startTime, selectedTime);
       setEndTime(selectedTime);
       setSelectedDateTime((prev) => ({
         ...prev,
         endTime: formattedTime,
+        duration,
       }));
     }
   };
@@ -481,7 +529,7 @@ export default function OwnerAppointment() {
 
       setSelectedProducts([]);
       setAgentCalendarModalVisible(false);
-      Alert.alert("Success", `Order #${orderNo} placed successfully!`);
+      Alert.alert("Success", `Appoinemnt Book successfully!`);
       await fetchAppointments(agentId, selectedDateTime.date);
       setIsSelectedAgent(false); // Close product modal after booking
     } catch (error) {
@@ -547,41 +595,47 @@ export default function OwnerAppointment() {
       }
     });
   };
-
   const handleAddDetails = async () => {
     if (!recipientName || !mobileNumber) {
       Alert.alert("Error", "Please fill in both fields.");
       return;
     }
-
+  
     try {
       const formattedName = capitalizeWords(recipientName);
-
+  
       // Insert new user into Supabase
       const { data, error } = await supabase
         .from("User")
         .insert([{ full_name: formattedName, mobile_number: mobileNumber }])
         .select("id, full_name, mobile_number")
         .single();
-
+  
       if (error) throw error;
-
+  
       const newRecipient = {
         id: data.id,
-        full_name: data.full_name, // ✅ Ensure correct field name
+        full_name: data.full_name,
         mobile_number: data.mobile_number,
       };
-
-      setUsers((prevUsers) => [...prevUsers, newRecipient]); // ✅ Update users list
-      setSavedRecipient(newRecipient); // ✅ Update savedRecipient
-
-      const addData = await AsyncStorage.setItem(
+  
+      // Save to AsyncStorage
+     const addDetails =  await AsyncStorage.setItem(
         "savedRecipient",
         JSON.stringify(newRecipient)
       );
+     const handleAdd = await AsyncStorage.setItem(
+        "recipientName",
+        data.full_name
+      );
+      console.log("savedRecipient", addDetails);
+      console.log("recipientName", handleAdd);
+      
+  
+      setUsers((prevUsers) => [...prevUsers, newRecipient]);
       setSavedRecipient(newRecipient);
-      console.log("savedRecipient", addData);
-
+      setRecipientName(data.full_name);
+  
       Alert.alert("Success", "Recipient details added successfully!");
       setModalVisible(false);
       setRecipientName("");
@@ -590,28 +644,107 @@ export default function OwnerAppointment() {
       Alert.alert("Error", error.message);
     }
   };
+  // const handleAddDetails = async () => {
+  //   if (!recipientName || !mobileNumber) {
+  //     Alert.alert("Error", "Please fill in both fields.");
+  //     return;
+  //   }
+
+  //   try {
+  //     const formattedName = capitalizeWords(recipientName);
+
+  //     // Insert new user into Supabase
+  //     const { data, error } = await supabase
+  //       .from("User")
+  //       .insert([{ full_name: formattedName, mobile_number: mobileNumber }])
+  //       .select("id, full_name, mobile_number")
+  //       .single();
+
+  //     if (error) throw error;
+
+  //     const newRecipient = {
+  //       id: data.id,
+  //       full_name: data.full_name, // ✅ Ensure correct field name
+  //       mobile_number: data.mobile_number,
+  //     };
+
+  //     setUsers((prevUsers) => [...prevUsers, newRecipient]); // ✅ Update users list
+  //     setSavedRecipient(newRecipient); // ✅ Update savedRecipient
+
+  //     const addData = await AsyncStorage.setItem(
+  //       "savedRecipient",
+  //       JSON.stringify(newRecipient)
+  //     );
+  //     setSavedRecipient(newRecipient);
+  //     console.log("savedRecipient", addData);
+
+  //     Alert.alert("Success", "Recipient details added successfully!");
+  //     setModalVisible(false);
+  //     setRecipientName("");
+  //     setMobileNumber("");
+  //   } catch (error) {
+  //     Alert.alert("Error", error.message);
+  //   }
+  // };
+  // const selectRecipient = async (recipient) => {
+  //   setRecipientName(recipient.full_name);
+  //   setMobileNumber(recipient.mobile_number);
+  //   setFilteredRecipients([]);
+
+  //   const recipientData = {
+  //     id: recipient.id,
+  //     full_name: recipient.full_name,
+  //     mobile_number: recipient.mobile_number,
+  //   };
+
+  //   try {
+  //     // ✅ Properly await the AsyncStorage operation
+  //     await AsyncStorage.setItem(
+  //       "savedRecipient",
+  //       JSON.stringify(recipientData)
+  //     );
+
+  //     // ✅ Now set the state AFTER successful storage
+  //     setSavedRecipient(recipientData);
+  //     console.log("Saved recipient:", recipientData); // Log the data directly
+
+  //     // Update users state
+  //     setUsers((prevUsers) => {
+  //       const userExists = prevUsers.some((user) => user.id === recipient.id);
+  //       return userExists ? prevUsers : [...prevUsers, recipientData];
+  //     });
+  //   } catch (error) {
+  //     console.error("Failed to save recipient:", error);
+  //   }
+
+  //   setModalVisible(false);
+  // };
+
   const selectRecipient = async (recipient) => {
     setRecipientName(recipient.full_name);
     setMobileNumber(recipient.mobile_number);
     setFilteredRecipients([]);
-
+  
     const recipientData = {
       id: recipient.id,
       full_name: recipient.full_name,
       mobile_number: recipient.mobile_number,
     };
-
+  
     try {
-      // ✅ Properly await the AsyncStorage operation
+      // Save both savedRecipient and recipientName
       await AsyncStorage.setItem(
         "savedRecipient",
         JSON.stringify(recipientData)
       );
-
-      // ✅ Now set the state AFTER successful storage
+      await AsyncStorage.setItem(
+        "recipientName",
+        recipient.full_name
+      );
+  
       setSavedRecipient(recipientData);
-      console.log("Saved recipient:", recipientData); // Log the data directly
-
+      console.log("Saved recipient:", recipientData);
+  
       // Update users state
       setUsers((prevUsers) => {
         const userExists = prevUsers.some((user) => user.id === recipient.id);
@@ -620,38 +753,9 @@ export default function OwnerAppointment() {
     } catch (error) {
       console.error("Failed to save recipient:", error);
     }
-
+  
     setModalVisible(false);
   };
-  // const selectRecipient = async (recipient) => {
-  //   setRecipientName(recipient.full_name);
-  //   setMobileNumber(recipient.mobile_number);
-  //   setFilteredRecipients([]); // Hide dropdown after selection
-
-  //   const recipientData = {
-  //     id: recipient.id,
-  //     full_name: recipient.full_name,
-  //     mobile_number: recipient.mobile_number,
-  //   };
-
-  //   console.log("recipientData", recipientData);
-
-  //   const saved = await AsyncStorage.setItem(
-  //     "savedRecipient",
-  //     JSON.stringify(recipientData)
-  //   );
-  //   setSavedRecipient(recipientData);
-  //   // ✅ Update savedRecipient
-  //   console.log("savedRecipient", saved);
-
-  //   // ✅ Add the selected user to users state
-  //   setUsers((prevUsers) => {
-  //     const userExists = prevUsers.some((user) => user.id === recipient.id);
-  //     return userExists ? prevUsers : [...prevUsers, recipientData];
-  //   });
-  //   setModalVisible(false);
-  //   // ✅ Save to AsyncStorage
-  // };
   const userMap = React.useMemo(() => {
     return users.reduce((acc, user) => {
       acc[user.id] = user.full_name;
@@ -666,50 +770,74 @@ export default function OwnerAppointment() {
     }, {});
   }, [users]);
 
+  // const fetchLatestUser = async () => {
+  //   try {
+  //     const savedData = await AsyncStorage.getItem("savedRecipient");
+
+  //     if (savedData) {
+  //       try {
+  //         const parsedData = JSON.parse(savedData);
+  //         setSavedRecipient(parsedData);
+  //       } catch (parseError) {
+  //         console.error("Error parsing saved recipient:", parseError);
+  //       }
+  //       return;
+  //     }
+
+  //     const { data, error } = await supabase
+  //       .from("User")
+  //       .select("id, full_name, mobile_number")
+  //       .order("id", { ascending: false })
+  //       .limit(1);
+
+  //     if (error) throw error;
+
+  //     if (data.length > 0) {
+  //       const latestUser = {
+  //         id: data[0].id,
+  //         full_name: data[0].full_name,
+  //         mobile_number: data[0].mobile_number,
+  //       };
+
+  //       setSavedRecipient(latestUser);
+  //       await AsyncStorage.setItem(
+  //         "savedRecipient",
+  //         JSON.stringify(latestUser)
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching user:", error.message);
+  //   }
+  // };
+
+  // ✅ Fetch saved recipient on component mount
+ 
   const fetchLatestUser = async () => {
     try {
+      // Retrieve savedRecipient
       const savedData = await AsyncStorage.getItem("savedRecipient");
-
+      const savedName = await AsyncStorage.getItem("recipientName");
+  
       if (savedData) {
         try {
           const parsedData = JSON.parse(savedData);
           setSavedRecipient(parsedData);
+          if (savedName) {
+            setRecipientName(savedName);
+          }
         } catch (parseError) {
           console.error("Error parsing saved recipient:", parseError);
         }
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("User")
-        .select("id, full_name, mobile_number")
-        .order("id", { ascending: false })
-        .limit(1);
-
-      if (error) throw error;
-
-      if (data.length > 0) {
-        const latestUser = {
-          id: data[0].id,
-          full_name: data[0].full_name,
-          mobile_number: data[0].mobile_number,
-        };
-
-        setSavedRecipient(latestUser);
-        await AsyncStorage.setItem(
-          "savedRecipient",
-          JSON.stringify(latestUser)
-        );
       }
     } catch (error) {
-      console.error("Error fetching user:", error.message);
+      console.error("Error retrieving saved recipient:", error.message);
     }
   };
-
-  // ✅ Fetch saved recipient on component mount
+  
   useEffect(() => {
     fetchLatestUser();
   }, []);
+  
 
   // Fetch Product List when modal opens
   const fetchProductList = async () => {
@@ -857,6 +985,8 @@ export default function OwnerAppointment() {
   const resetSelectedProduct = () => {
     setSelectedProducts([]);
   };
+
+  const handleDifferentDate = (date) => {};
   return (
     <>
       <View style={{ padding: 10 }}>
@@ -953,68 +1083,72 @@ export default function OwnerAppointment() {
               </View>
             </View>
           </Modal>
-          <Modal
-            animationType="slide"
-            transparent={true}
-            visible={modalVisible}
-            onRequestClose={() => setModalVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Booking for someone else</Text>
-                <Text style={styles.modalSubtitle}>
-                  We will share booking details on recipient's mobile number.
-                </Text>
-
-                <View style={styles.inputContainer}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Mobile Number"
-                    keyboardType="phone-pad"
-                    value={mobileNumber}
-                    onChangeText={handleMobileNumberChange}
-                    placeholderTextColor="#777"
-                    maxLength={10}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Recipient's Name"
-                    value={recipientName}
-                    onChangeText={handleRecipientNameChange} // ✅ Calls function when typing
-                    placeholderTextColor="#777"
-                  />
-
-                  {filteredRecipients.length > 0 && (
-                    <ScrollView style={styles.dropdown}>
-                      {filteredRecipients.map((recipient, index) => (
-                        <TouchableOpacity
-                          key={index}
-                          style={styles.dropdownItem}
-                          onPress={() => selectRecipient(recipient)}
-                        >
-                          <Text style={styles.dropdownText}>
-                            {recipient.full_name} - {recipient.mobile_number}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-                </View>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={handleAddDetails}
-                >
-                  <Text style={styles.addButtonText}>Add Details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.closeBUtton}
-                  onPress={() => setModalVisible(false)}
-                >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
+     <Modal
+       animationType="slide"
+       transparent={true}
+       visible={modalVisible}
+       onRequestClose={() => setModalVisible(false)}
+     >
+       <TouchableWithoutFeedback onPress={() => setFilteredRecipients([])}>
+         <View style={styles.modalOverlay}>
+           <TouchableWithoutFeedback onPress={() => {}}>
+             <View style={styles.modalContent}>
+               <Text style={styles.modalTitle}>Booking for someone else</Text>
+               <Text style={styles.modalSubtitle}>
+                 We will share booking details on recipient's mobile number.
+               </Text>
+     
+               <View style={styles.inputContainer}>
+                 <TextInput
+                   style={styles.input}
+                   placeholder="Mobile Number"
+                   keyboardType="phone-pad"
+                   value={mobileNumber}
+                   onChangeText={handleMobileNumberChange}
+                   placeholderTextColor="#777"
+                   maxLength={10}
+                 />
+                 <TextInput
+                   style={styles.input}
+                   placeholder="Recipient's Name"
+                   value={recipientName}
+                   onChangeText={handleRecipientNameChange}
+                   placeholderTextColor="#777"
+                 />
+     
+                 {filteredRecipients.length > 0 && (
+                   <ScrollView style={styles.dropdown}>
+                     {filteredRecipients.map((recipient, index) => (
+                       <TouchableOpacity
+                         key={index}
+                         style={styles.dropdownItem}
+                         onPress={() => selectRecipient(recipient)}
+                       >
+                         <Text style={styles.dropdownText}>
+                           {recipient.full_name} - {recipient.mobile_number}
+                         </Text>
+                       </TouchableOpacity>
+                     ))}
+                   </ScrollView>
+                 )}
+               </View>
+               <TouchableOpacity
+                 style={styles.addButton}
+                 onPress={handleAddDetails}
+               >
+                 <Text style={styles.addButtonText}>Add Details</Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                 style={styles.closeBUtton}
+                 onPress={() => setModalVisible(false)}
+               >
+                 <Text style={styles.cancelButtonText}>Cancel</Text>
+               </TouchableOpacity>
+             </View>
+           </TouchableWithoutFeedback>
+         </View>
+       </TouchableWithoutFeedback>
+     </Modal>
         </View>
         <View style={{ marginTop: 5 }}>
           <Text style={[styles.text, { marginTop: 5, paddingLeft: 5 }]}>
@@ -1046,7 +1180,7 @@ export default function OwnerAppointment() {
                         updateProductQuantity(item.id, item.quantity - 1)
                       }
                     >
-                      <FontAwesome name="minus" size={10} color={"red"} />
+                      <FontAwesome name="minus" size={15} color={"red"} />
                     </TouchableOpacity>
 
                     <TextInput
@@ -1063,7 +1197,7 @@ export default function OwnerAppointment() {
                         updateProductQuantity(item.id, item.quantity + 1)
                       }
                     >
-                      <FontAwesome name="plus" size={10} color={"green"} />
+                      <FontAwesome name="plus" size={15} color={"green"} />
                     </TouchableOpacity>
                   </View>
 
@@ -1327,11 +1461,11 @@ export default function OwnerAppointment() {
               <>
                 <View
                   style={{
-                    flexDirection: "row", // Arrange items horizontally
-                    justifyContent: "space-between", // Space between Start & End Time
+                    flexDirection: "row",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    width: "100%", // Ensure full width for spacing
-                    paddingHorizontal: 10, // Add padding for better spacing
+                    width: "100%",
+                    paddingHorizontal: 10,
                     marginTop: 5,
                   }}
                 >
@@ -1352,7 +1486,6 @@ export default function OwnerAppointment() {
                           : "Select Start Time"}
                       </Text>
                     </TouchableOpacity>
-
                     {showStartPicker && (
                       <DateTimePicker
                         value={startTime}
@@ -1363,7 +1496,17 @@ export default function OwnerAppointment() {
                       />
                     )}
                   </View>
-
+                  {selectedDateTime?.startTime && selectedDateTime?.endTime && (
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        marginTop: 5,
+                        color: "red",
+                      }}
+                    >
+                      {selectedDateTime.duration}
+                    </Text>
+                  )}
                   {/* End Time Selection */}
                   <View
                     style={{ alignItems: "center", flex: 1, marginLeft: 10 }}
@@ -1384,7 +1527,6 @@ export default function OwnerAppointment() {
                           : "Select End Time"}
                       </Text>
                     </TouchableOpacity>
-
                     {showEndPicker && (
                       <DateTimePicker
                         value={endTime}
@@ -1422,6 +1564,9 @@ export default function OwnerAppointment() {
   );
 }
 const styles = StyleSheet.create({
+  selectedProductsScroll:{
+    maxHeight: 110,
+  },
   timePickerContainer: {
     width: "100%",
   },
@@ -1496,7 +1641,6 @@ const styles = StyleSheet.create({
     color: "red",
     fontSize: 12,
     textAlign: "center",
-    marginTop: 10,
   },
 
   dayHeader: {

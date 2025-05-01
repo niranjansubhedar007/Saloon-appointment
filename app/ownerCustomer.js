@@ -9,6 +9,8 @@ import {
   Alert,
   Linking,
   ScrollView,
+  TextInput,
+
 } from "react-native";
 import Footer from "./footer";
 import { createClient } from "@supabase/supabase-js";
@@ -30,6 +32,7 @@ export default function OwnerCustomer() {
   const [viewMode, setViewMode] = useState("active"); // active | inactive | archived
   const [agents, setAgents] = useState([]);
   const [selectedAgents, setSelectedAgents] = useState([]);
+  const [searchText, setSearchText] = useState("");
 
   const API_APPOINTMENTS =
     "https://cqdinxweotvfamknmgap.supabase.co/rest/v1/Appointments";
@@ -229,68 +232,69 @@ export default function OwnerCustomer() {
   );
 
   const getDisplayedUsers = () => {
-    switch (viewMode) {
-      case "archived":
-        return archivedUsers;
-      case "inactive":
-        return inactiveUsers;
-      case "active":
-        return activeUsers;
-    }
+    let users =
+      viewMode === "archived"
+        ? archivedUsers
+        : viewMode === "inactive"
+        ? inactiveUsers
+        : activeUsers;
+  
+    if (searchText.trim() === "") return users;
+  
+    return users.filter(
+      (user) =>
+        user.full_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        user.mobile_number?.includes(searchText)
+    );
   };
-
   return (
     <>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            {viewMode === "archived"
-              ? `Archived Customers (${archivedUsers.length})`
-              : viewMode === "inactive"
-              ? `Inactive Customers (${inactiveUsers.length})`
-              : `Active Customers (${activeUsers.length})`}
-          </Text>
-          <View style={styles.toggleWrapper}>
+            <View style={styles.header}>
+        <Text style={styles.title}>
+          {viewMode === "archived"
+            ? `Archived Customers (${archivedUsers.length})`
+            : viewMode === "inactive"
+            ? `Inactive Customers (${inactiveUsers.length})`
+            : `Active Customers (${activeUsers.length})`}
+        </Text>
+      
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by Name or Mobile No"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+      
+        <View style={styles.toggleWrapper}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, viewMode === "active" && styles.toggleActive]}
+            onPress={() => setViewMode("active")}
+          >
+            <Text style={styles.toggleText}>Active</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, viewMode === "inactive" && styles.toggleActive]}
+            onPress={() => setViewMode("inactive")}
+          >
+            <Text style={styles.toggleText}>Inactive</Text>
+          </TouchableOpacity>
+          {viewMode !== "active" && (
             <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                viewMode === "active" && styles.toggleActive,
-              ]}
-              onPress={() => setViewMode("active")}
+              style={[styles.toggleBtn, viewMode === "archived" && styles.toggleActive]}
+              onPress={() => setViewMode("archived")}
             >
-              <Text style={styles.toggleText}>Active</Text>
+              <Text style={styles.toggleText}>Archived</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                viewMode === "inactive" && styles.toggleActive,
-              ]}
-              onPress={() => setViewMode("inactive")}
-            >
-              <Text style={styles.toggleText}>Inactive</Text>
-            </TouchableOpacity>
-
-            {/* Always show Archived button, but don't highlight unless selected */}
-            {viewMode !== "active" && (
-              <TouchableOpacity
-                style={[
-                  styles.toggleBtn,
-                  viewMode === "archived" && styles.toggleActive,
-                ]}
-                onPress={() => setViewMode("archived")}
-              >
-                <Text style={styles.toggleText}>Archived</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          )}
         </View>
+      </View>
 
         <AgentList />
         {loading ? (
           <ActivityIndicator size="large" color="#2196F3" />
         ) : (
-          <View style={{ height: 520 }}>
+          <View style={{ height: 450 }}>
             <FlatList
               data={getDisplayedUsers()}
               keyExtractor={(item) => item.id.toString()}
@@ -349,6 +353,14 @@ export default function OwnerCustomer() {
 }
 
 const styles = StyleSheet.create({
+  searchInput: {
+    height: 40,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
   selectedAgentName: {
     color: "#007bff",
   },

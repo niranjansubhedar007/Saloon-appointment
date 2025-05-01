@@ -729,6 +729,9 @@ export default function Billing() {
       setDiscountType("subtract");
       setModalVisible(false);
       await fetchAppointments(agentId, selectedDateTime.date);
+      await AsyncStorage.removeItem("savedRecipient"); // Clear saved recipient from AsyncStorage
+      await AsyncStorage.removeItem("recipientId"); // Clear saved recipient ID
+      await AsyncStorage.removeItem("recipientName"); // Clear saved recipient name
     } catch (error) {
       console.error("Payment error:", error.message);
       Alert.alert("Error", "Failed to process payment.");
@@ -1036,6 +1039,7 @@ export default function Billing() {
   };
   return (
     <>
+    <ScrollView>
       <View style={{ padding: 10 }}>
         <View style={styles.agentListContainer}>
           {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
@@ -1436,7 +1440,7 @@ export default function Billing() {
 
                           {orderDetails.length > 0 ||
                           selectedProducts.length > 0 ? (
-                            <View>
+                            <ScrollView style={styles.selectedProductsScroll}>
                               {/* ✅ Render Order Details First */}
                               {orderDetails.map((detail) => (
                                 <View
@@ -1466,7 +1470,7 @@ export default function Billing() {
                                       >
                                         <FontAwesome
                                           name="minus"
-                                          size={12}
+                                          size={15}
                                           color="red"
                                         />
                                       </TouchableOpacity>
@@ -1494,7 +1498,7 @@ export default function Billing() {
                                       >
                                         <FontAwesome
                                           name="plus"
-                                          size={12}
+                                          size={15}
                                           color="green"
                                         />
                                       </TouchableOpacity>
@@ -1543,7 +1547,7 @@ export default function Billing() {
                                         >
                                           <FontAwesome
                                             name="minus"
-                                            size={12}
+                                            size={15}
                                             color="red"
                                           />
                                         </TouchableOpacity>
@@ -1573,7 +1577,7 @@ export default function Billing() {
                                         >
                                           <FontAwesome
                                             name="plus"
-                                            size={12}
+                                            size={15}
                                             color="green"
                                           />
                                         </TouchableOpacity>
@@ -1581,7 +1585,7 @@ export default function Billing() {
                                     </View>
                                   </ScrollView>
                                 ))}
-                            </View>
+                            </ScrollView>
                           ) : (
                             <Text
                               style={{
@@ -1712,6 +1716,9 @@ export default function Billing() {
                                         : "#000",
                                     fontSize: 18,
                                     fontWeight: "bold",
+                                    items: "center",
+                                    alignItems: "center",
+                                    marginTop: -5, 
                                   }}
                                 >
                                   -
@@ -1731,6 +1738,9 @@ export default function Billing() {
                                       discountType === "add" ? "#fff" : "#000",
                                     fontSize: 18,
                                     fontWeight: "bold",
+                                    items: "center",
+                                    alignItems: "center",
+                                    marginTop: -5, 
                                   }}
                                 >
                                   +
@@ -1866,11 +1876,15 @@ export default function Billing() {
           </View>
         </Modal>
       </View>
+      </ScrollView>
       <Footer />
     </>
   );
 }
 const styles = StyleSheet.create({
+  selectedProductsScroll:{
+    maxHeight: 110,
+  },
   qrOverlay: {
     position: "absolute",
     top: 0,
@@ -2101,8 +2115,8 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 5,
     padding: 10,
-    marginVertical: 10,
-    fontSize: 10,
+    marginVertical: 4,
+    fontSize: 12,
     width: "70%",
   },
   paymentInput: {

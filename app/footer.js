@@ -15,35 +15,47 @@ const Footer = () => {
     router.push(route);
   };
   const handleLogout = async () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        {
-          text: "Cancel",
-          onPress: () => console.log("Cancel pressed"),
-          style: "cancel",
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      {
+        text: "Cancel",
+        onPress: () => console.log("Cancel pressed"),
+        style: "cancel",
+      },
+      {
+        text: "OK",
+        onPress: async () => {
+          const keys = await AsyncStorage.getAllKeys();
+          console.log(keys); // Should not include 'savedRecipient' or 'recipientName'
+
+          try {
+            // Remove items from AsyncStorage
+            await AsyncStorage.multiRemove([
+              "@token",
+              "@userId",
+              "@userName",
+
+              "savedRecipient",
+              "recipientId",
+              "recipientName",
+              "recipientPhone",
+            ]);
+            await AsyncStorage.clear();
+
+            // Clear Google Sign-In session
+            await GoogleSignin.signOut();
+
+            // Reset component state
+
+            // Navigate to home
+            router.push("/");
+          } catch (error) {
+            console.error("Error during logout:", error);
+            Alert.alert("Error", "An error occurred during logout.");
+          }
         },
-        {
-          text: "OK",
-          onPress: async () => {
-            await AsyncStorage.removeItem("@token");
-            await AsyncStorage.removeItem("userName");
-            await AsyncStorage.removeItem("role");
-            await AsyncStorage.removeItem("waiter");
-            await AsyncStorage.removeItem("admin");
-            await AsyncStorage.removeItem("captain");
-            await GoogleSignin.signOut(); // Clear Google Sign-In session
-  
-            router.push("/"); // Navigate to home on confirmation
-          },
-        },
-      ]
-    );
+      },
+    ]);
   };
-  
-
-
 
   useEffect(() => {
     const fetchRole = async () => {
@@ -78,9 +90,7 @@ const Footer = () => {
 
       <TouchableOpacity
         onPress={() =>
-          handleTabPress(
-            role === "owner" ? "/ownerCustomer" : "/customer"
-          )
+          handleTabPress(role === "owner" ? "/ownerCustomer" : "/customer")
         }
       >
         <View style={styles.footerItem}>
@@ -96,8 +106,7 @@ const Footer = () => {
           <Text
             style={[
               styles.text,
-              (pathname === "/customer" ||
-                pathname === "/ownerCustomer") &&
+              (pathname === "/customer" || pathname === "/ownerCustomer") &&
                 styles.selectedText,
             ]}
           >
@@ -107,9 +116,7 @@ const Footer = () => {
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() =>
-          handleTabPress(
-            role === "owner" ? "/ownerBilling" : "/billing"
-          )
+          handleTabPress(role === "owner" ? "/ownerBilling" : "/billing")
         }
       >
         <View style={styles.footerItem}>
@@ -125,8 +132,7 @@ const Footer = () => {
           <Text
             style={[
               styles.text,
-              (pathname === "/billing" ||
-                pathname === "/ownerBilling") &&
+              (pathname === "/billing" || pathname === "/ownerBilling") &&
                 styles.selectedText,
             ]}
           >

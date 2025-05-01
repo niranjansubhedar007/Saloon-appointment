@@ -12,6 +12,7 @@ import {
   ScrollView,
   Platform,
   Linking,
+  KeyboardAvoidingView
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -787,6 +788,10 @@ export default function OwnerBilling() {
       setDiscountType("subtract");
       setModalVisible(false);
       await fetchAppointments(agentId, selectedDateTime.date);
+      await AsyncStorage.removeItem("savedRecipient"); // Clear saved recipient from AsyncStorage
+      await AsyncStorage.removeItem("recipientId"); // Clear saved recipient ID
+      await AsyncStorage.removeItem("recipientName"); // Clear saved recipient name
+      
       setSavedRecipient({});
       // const checkID = await AsyncStorage.removeItem("savedRecipient"); // Clear saved recipient
     } catch (error) {
@@ -1103,6 +1108,7 @@ export default function OwnerBilling() {
   };
   return (
     <>
+    <ScrollView>
       <View style={{ padding: 10 }}>
         <View style={styles.agentListContainer}>
           <FlatList
@@ -1569,7 +1575,7 @@ export default function OwnerBilling() {
 
                           {orderDetails.length > 0 ||
                           selectedProducts.length > 0 ? (
-                            <View>
+            <ScrollView style={styles.selectedProductsScroll}>
                               {/* ✅ Render Order Details First */}
                               {orderDetails.map((detail) => (
                                 <View
@@ -1599,7 +1605,7 @@ export default function OwnerBilling() {
                                       >
                                         <FontAwesome
                                           name="minus"
-                                          size={12}
+                                          size={15}
                                           color="red"
                                         />
                                       </TouchableOpacity>
@@ -1627,7 +1633,7 @@ export default function OwnerBilling() {
                                       >
                                         <FontAwesome
                                           name="plus"
-                                          size={12}
+                                          size={15}
                                           color="green"
                                         />
                                       </TouchableOpacity>
@@ -1676,7 +1682,7 @@ export default function OwnerBilling() {
                                         >
                                           <FontAwesome
                                             name="minus"
-                                            size={12}
+                                            size={15}
                                             color="red"
                                           />
                                         </TouchableOpacity>
@@ -1706,7 +1712,7 @@ export default function OwnerBilling() {
                                         >
                                           <FontAwesome
                                             name="plus"
-                                            size={12}
+                                            size={15}
                                             color="green"
                                           />
                                         </TouchableOpacity>
@@ -1714,7 +1720,7 @@ export default function OwnerBilling() {
                                     </View>
                                   </ScrollView>
                                 ))}
-                            </View>
+                            </ScrollView>
                           ) : (
                             <Text
                               style={{
@@ -1852,7 +1858,11 @@ export default function OwnerBilling() {
                                         ? "#fff"
                                         : "#000",
                                     fontSize: 18,
+                                  
                                     fontWeight: "bold",
+                                    items: "center",
+                                    alignItems: "center",
+                                    marginTop: -5, 
                                   }}
                                 >
                                   -
@@ -1872,6 +1882,9 @@ export default function OwnerBilling() {
                                       discountType === "add" ? "#fff" : "#000",
                                     fontSize: 18,
                                     fontWeight: "bold",
+                                    items: "center",
+                                    alignItems: "center",
+                                    marginTop: -5, 
                                   }}
                                 >
                                   +
@@ -2007,11 +2020,15 @@ export default function OwnerBilling() {
           </View>
         </Modal>
       </View>
+      </ScrollView>
       <Footer />
     </>
   );
 }
 const styles = StyleSheet.create({
+  selectedProductsScroll:{
+    maxHeight: 110,
+  },
   qrOverlay: {
     position: "absolute",
     top: 0,
@@ -2251,7 +2268,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 10,
     marginVertical: 10,
-    fontSize: 10,
+    fontSize: 12,
     width: "70%",
   },
   paymentInput: {
@@ -2259,7 +2276,6 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 5,
     padding: 10,
-    marginVertical: 10,
     fontSize: 12,
   },
   confirmButton: {

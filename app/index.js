@@ -181,12 +181,12 @@ export default function Index() {
             console.log("Unknown role:", role);
           }
         } else {
-          console.error("No role found for the email:", email);
+          // console.error("No role found for the email:", email);
           Alert.alert("Error", "No role assigned. Contact support.");
         }
       }
     } catch (error) {
-      console.error("Google Sign-In error:", error);
+      // console.error("Google Sign-In error:", error);
     }
   };
   const handleLogin = async (e) => {

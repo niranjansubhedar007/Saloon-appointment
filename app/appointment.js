@@ -10,6 +10,7 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  TouchableWithoutFeedback ,
   Platform,
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
@@ -114,7 +115,52 @@ export default function Appointment() {
       Alert.alert("Error", error.message);
     }
   };
+  const calculateDuration = (start, end) => {
+    const diffMs = end - start;
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
 
+    return (
+      (hours > 0 ? `${hours} hr${hours > 1 ? "s" : ""} ` : "") +
+      (minutes > 0 ? `${minutes} min` : hours === 0 ? "0 min" : "")
+    );
+  };
+
+  const handleStartTimeChange = (event, selectedTime) => {
+    setShowStartPicker(false);
+    if (selectedTime) {
+      const formattedTime = selectedTime.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false, // Ensure 24-hour format
+      });
+
+      console.log("Formatted Start Time:", formattedTime);
+
+      // Calculate end time (1 hour later)
+      const endTime = new Date(selectedTime);
+      endTime.setHours(endTime.getHours() + 1);
+
+      const formattedEndTime = endTime.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+      setStartTime(selectedTime);
+      setEndTime(endTime); // Update end time state
+
+      const duration = calculateDuration(selectedTime, endTime);
+
+      setSelectedDateTime((prev) => ({
+        ...prev,
+        startTime: formattedTime,
+        endTime: formattedEndTime,
+        duration, // save for display
+      }));
+    }
+  };
   // const updateAppointmentTime = async () => {
   //   if (!editingAppointment) return;
 
@@ -152,24 +198,27 @@ export default function Appointment() {
   // };
 
   // Handle Start Time Selection
-  const handleStartTimeChange = (event, selectedTime) => {
-    setShowStartPicker(false);
-    if (selectedTime) {
-      const formattedTime = selectedTime.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false, // Ensure 24-hour format
-      });
+  // const handleStartTimeChange = (event, selectedTime) => {
+  //   setShowStartPicker(false);
+  //   if (selectedTime) {
+  //     const formattedTime = selectedTime.toLocaleTimeString("en-US", {
+  //       hour: "2-digit",
+  //       minute: "2-digit",
+  //       hour12: false, // Ensure 24-hour format
+  //     });
 
-      console.log("Formatted Start Time:", formattedTime);
+  //     console.log("Formatted Start Time:", formattedTime);
+  //     const duration = calculateDuration(startTime, selectedTime);
 
-      setStartTime(selectedTime);
-      setSelectedDateTime((prev) => ({
-        ...prev,
-        startTime: formattedTime,
-      }));
-    }
-  };
+  //     setStartTime(selectedTime);
+  //     setSelectedDateTime((prev) => ({
+  //       ...prev,
+  //       startTime: formattedTime,
+
+  //       duration
+  //     }));
+  //   }
+  // };
   const fetchUnavailableDates = async (agentId) => {
     if (!agentId) return;
 
@@ -216,11 +265,13 @@ export default function Appointment() {
       });
 
       console.log("Formatted End Time:", formattedTime);
+      const duration = calculateDuration(startTime, selectedTime);
 
       setEndTime(selectedTime);
       setSelectedDateTime((prev) => ({
         ...prev,
         endTime: formattedTime,
+        duration,
       }));
     }
   };
@@ -516,7 +567,7 @@ export default function Appointment() {
 
       setSelectedProducts([]);
       setAgentCalendarModalVisible(false);
-      Alert.alert("Success", `Order #${orderNo} placed successfully!`);
+      Alert.alert("Success", `Appointment Book successfully!`);
       await fetchAppointments(agentId, selectedDateTime.date);
       setIsSelectedAgent(false); // Close product modal after booking
     } catch (error) {
@@ -669,36 +720,23 @@ export default function Appointment() {
 
   const fetchLatestUser = async () => {
     try {
+      // Retrieve savedRecipient
       const savedData = await AsyncStorage.getItem("savedRecipient");
-
+      const savedName = await AsyncStorage.getItem("recipientName");
+  
       if (savedData) {
-        setSavedRecipient(JSON.parse(savedData));
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("User")
-        .select("id, full_name, mobile_number")
-        .order("id", { ascending: false })
-        .limit(1);
-
-      if (error) throw error;
-
-      if (data.length > 0) {
-        const latestUser = {
-          id: data[0].id,
-          full_name: data[0].full_name,
-          mobile_number: data[0].mobile_number,
-        };
-
-        setSavedRecipient(latestUser);
-        await AsyncStorage.setItem(
-          "savedRecipient",
-          JSON.stringify(latestUser)
-        );
+        try {
+          const parsedData = JSON.parse(savedData);
+          setSavedRecipient(parsedData);
+          if (savedName) {
+            setRecipientName(savedName);
+          }
+        } catch (parseError) {
+          console.error("Error parsing saved recipient:", parseError);
+        }
       }
     } catch (error) {
-      console.error("Error fetching user:", error.message);
+      console.error("Error retrieving saved recipient:", error.message);
     }
   };
 
@@ -855,347 +893,365 @@ export default function Appointment() {
   const resetSelectedProduct = () => {
     setSelectedProducts([]);
   };
+
+
+
+  
   return (
     <>
-      <View style={{ padding: 10 }}>
-        <View style={styles.container}>
-          <Image
-            source={require("../assets/phonebgimg.png")}
-            style={styles.image}
-          />
+      <ScrollView>
+        <View style={{ padding: 10 }}>
+          <View style={styles.container}>
+            <Image
+              source={require("../assets/phonebgimg.png")}
+              style={styles.image}
+            />
 
-          <View style={styles.textContainer}>
-            <Text style={styles.text}>
-              <Text style={styles.semiBold}>Booking for someone else?</Text>{" "}
-              <Text
-                style={styles.addDetails}
-                onPress={() => {
-                  setModalVisible(true);
-                  setRecipientName(null);
-                  setMobileNumber(null);
-                  setFilteredRecipients([]); // ✅ Clear dropdown on modal open
-                }}
-              >
-                ADD CUSTOMERS
-              </Text>
-            </Text>
-            {savedRecipient && (
-              <Text style={styles.savedDetails}>
-                {savedRecipient.full_name || "Unknown"} -{" "}
-                {savedRecipient.mobile_number || "Unknown"}
-              </Text>
-            )}
-          </View>
-
-          {/* Product List Modal */}
-          <Modal
-            animationType="slide"
-            transparent={true}
-            visible={productModalVisible}
-            onRequestClose={() => setProductModalVisible(false)}
-          >
-            <View style={styles.modalOverlayProduct}>
-              <View style={styles.modalContentProduct}>
-                <TouchableOpacity
-                  style={styles.closeIconContainer}
-                  onPress={() => setProductModalVisible(false)}
+            <View style={styles.textContainer}>
+              <Text style={styles.text}>
+                <Text style={styles.semiBold}>Booking for someone else?</Text>{" "}
+                <Text
+                  style={styles.addDetails}
+                  onPress={() => {
+                    setModalVisible(true);
+                    setRecipientName(null);
+                    setMobileNumber(null);
+                    setFilteredRecipients([]); // ✅ Clear dropdown on modal open
+                  }}
                 >
-                  <FontAwesome name="close" size={20} color="red" />
-                </TouchableOpacity>
-                <Text style={styles.modalTitleProduct}>Select a Product</Text>
+                  ADD CUSTOMERS
+                </Text>
+              </Text>
+              {savedRecipient && (
+                <Text style={styles.savedDetails}>
+                  {savedRecipient.full_name || "Unknown"} -{" "}
+                  {savedRecipient.mobile_number || "Unknown"}
+                </Text>
+              )}
+            </View>
 
-                <FlatList
-                  data={products}
-                  keyExtractor={(item) =>
-                    item["Unique Id"] || Math.random().toString()
-                  }
-                  numColumns={3} // ✅ Ensures 3 columns
-                  columnWrapperStyle={styles.rowContainer} // ✅ Ensures proper spacing
-                  renderItem={({ item }) => {
-                    const selectedProduct = selectedProducts.find(
-                      (p) => p.id === item.id
-                    );
+            {/* Product List Modal */}
+            <Modal
+              animationType="slide"
+              transparent={true}
+              visible={productModalVisible}
+              onRequestClose={() => setProductModalVisible(false)}
+            >
+              <View style={styles.modalOverlayProduct}>
+                <View style={styles.modalContentProduct}>
+                  <TouchableOpacity
+                    style={styles.closeIconContainer}
+                    onPress={() => setProductModalVisible(false)}
+                  >
+                    <FontAwesome name="close" size={20} color="red" />
+                  </TouchableOpacity>
+                  <Text style={styles.modalTitleProduct}>Select a Product</Text>
 
-                    return (
-                      <View style={styles.productContainer}>
-                        <TouchableOpacity
-                          style={[
-                            styles.productBox,
-                            selectedProduct ? styles.selectedProductBox : {},
-                          ]}
-                          onPress={() => handleProductPress(item)}
-                        >
-                          <View style={styles.productHeader}>
-                            <Text style={styles.uniqueId}>
-                              {item["Unique Id"]}
-                            </Text>
-                            <Text style={styles.price}>₹{item.Price}</Text>
-                          </View>
+                  <FlatList
+                    data={products}
+                    keyExtractor={(item) =>
+                      item["Unique Id"] || Math.random().toString()
+                    }
+                    numColumns={3} // ✅ Ensures 3 columns
+                    columnWrapperStyle={styles.rowContainer} // ✅ Ensures proper spacing
+                    renderItem={({ item }) => {
+                      const selectedProduct = selectedProducts.find(
+                        (p) => p.id === item.id
+                      );
 
-                          <View style={styles.productBody}>
-                            <Text style={styles.productName}>{item.Name}</Text>
-                          </View>
-                          {selectedProduct && (
-                            <View style={styles.counter}>
-                              <Text style={styles.counterText}>
-                                {selectedProduct.quantity}
+                      return (
+                        <View style={styles.productContainer}>
+                          <TouchableOpacity
+                            style={[
+                              styles.productBox,
+                              selectedProduct ? styles.selectedProductBox : {},
+                            ]}
+                            onPress={() => handleProductPress(item)}
+                          >
+                            <View style={styles.productHeader}>
+                              <Text style={styles.uniqueId}>
+                                {item["Unique Id"]}
+                              </Text>
+                              <Text style={styles.price}>₹{item.Price}</Text>
+                            </View>
+
+                            <View style={styles.productBody}>
+                              <Text style={styles.productName}>
+                                {item.Name}
                               </Text>
                             </View>
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }}
-                  contentContainerStyle={{ paddingHorizontal: 10 }} // ✅ Add padding
-                />
-              </View>
-            </View>
-          </Modal>
-          <Modal
-            animationType="slide"
-            transparent={true}
-            visible={modalVisible}
-            onRequestClose={() => setModalVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-           
-
-                <Text style={styles.modalTitle}>Booking for someone else</Text>
-                <Text style={styles.modalSubtitle}>
-                  We will share booking details on recipient's mobile number.
-                </Text>
-
-                <View style={styles.inputContainer}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Mobile Number"
-                    keyboardType="phone-pad"
-                    value={mobileNumber}
-                    onChangeText={handleMobileNumberChange}
-                    placeholderTextColor="#777"
-                    maxLength={10}
+                            {selectedProduct && (
+                              <View style={styles.counter}>
+                                <Text style={styles.counterText}>
+                                  {selectedProduct.quantity}
+                                </Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    }}
+                    contentContainerStyle={{ paddingHorizontal: 10 }} // ✅ Add padding
                   />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Recipient's Name"
-                    value={recipientName}
-                    onChangeText={handleRecipientNameChange} // ✅ Calls function when typing
-                    placeholderTextColor="#777"
-                  />
-
-                  {filteredRecipients.length > 0 && (
-                    <ScrollView style={styles.dropdown}>
-                      {filteredRecipients.map((recipient, index) => (
-                        <TouchableOpacity
-                          key={index}
-                          style={styles.dropdownItem}
-                          onPress={() => selectRecipient(recipient)}
-                        >
-                          <Text style={styles.dropdownText}>
-                            {recipient.full_name} - {recipient.mobile_number}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
                 </View>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={handleAddDetails}
-                >
-                  <Text style={styles.addButtonText}>Add Details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.closeBUtton}
-                  onPress={() => setModalVisible(false)}
-                >
-                      <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
               </View>
-            </View>
-          </Modal>
-        </View>
-        <View style={{ marginTop: 5 }}>
-          <Text style={[styles.text, { marginTop: 5, paddingLeft: 5 }]}>
-            <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
-            <Text
-              style={styles.addDetails}
-              onPress={async () => {
-                await fetchProductList();
-                setProductModalVisible(true);
-              }}
-            >
-              ADD SERVICE
-            </Text>
+            </Modal>
+
+
+<Modal
+  animationType="slide"
+  transparent={true}
+  visible={modalVisible}
+  onRequestClose={() => setModalVisible(false)}
+>
+  <TouchableWithoutFeedback onPress={() => setFilteredRecipients([])}>
+    <View style={styles.modalOverlay}>
+      <TouchableWithoutFeedback onPress={() => {}}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Booking for someone else</Text>
+          <Text style={styles.modalSubtitle}>
+            We will share booking details on recipient's mobile number.
           </Text>
-        </View>
 
-        {selectedProducts.length > 0 && (
-          <View style={styles.selectedProductsContainer}>
-            <ScrollView style={styles.selectedProductsScroll}>
-              {selectedProducts.map((item) => (
-                <View key={item.id} style={styles.selectedProductRow}>
-                  {/* Product Name */}
-                  <Text style={styles.selectedProductName}>{item.Name}</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Mobile Number"
+              keyboardType="phone-pad"
+              value={mobileNumber}
+              onChangeText={handleMobileNumberChange}
+              placeholderTextColor="#777"
+              maxLength={10}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Recipient's Name"
+              value={recipientName}
+              onChangeText={handleRecipientNameChange}
+              placeholderTextColor="#777"
+            />
 
-                  {/* Quantity Controls */}
-                  <View style={styles.qtyControl}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateProductQuantity(item.id, item.quantity - 1)
-                      }
-                    >
-                      <FontAwesome name="minus" size={10} color={"red"} />
-                    </TouchableOpacity>
-
-                    <TextInput
-                      style={styles.qtyInput}
-                      keyboardType="numeric"
-                      value={String(item.quantity)}
-                      onChangeText={(value) =>
-                        updateProductQuantity(item.id, parseInt(value) || 1)
-                      }
-                    />
-
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateProductQuantity(item.id, item.quantity + 1)
-                      }
-                    >
-                      <FontAwesome name="plus" size={10} color={"green"} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Price */}
-                  <Text style={styles.selectedProductPrice}>
-                    ₹{(item.quantity * item.Price).toFixed(2)}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-        <View style={styles.agentListContainer}>
-          {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {generateWeekDatesForAppointments().map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                disabled={item.isUnavailable} // ✅ Disable click on unavailable dates
-                style={[
-                  styles.dayColumn,
-                  item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      borderColor: "#007bff",
-                      borderWidth: 1,
-                      backgroundColor: "rgba(0,123,255,0.1)",
-                      }
-                    : {},
-                ]}
-                onPress={() => {
-                  if (!item.isUnavailable) {
-                    setSelectedDateTime({
-                      date: item.date.toISOString().split("T")[0],
-                      startTime: "",
-                      endTime: "",
-                      status: "Booked",
-                    });
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.dayHeader,
-                    item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
-                >
-                  {item.date.toLocaleDateString("en-US", { weekday: "short" })}
-                </Text>
-                <Text
-                  style={[
-                    styles.dateHeader,
-                    item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
-                >
-                  {item.date.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.appointmentContainer}>
-          <ScrollView style={{ height: 350 }}>
-            {appointments.length > 0 ? (
-              <View style={{ marginTop: 3 }}>
-                <Text style={{ fontSize: 12, marginLeft: 5 }}>
-                  Appointments:
-                </Text>
-                {appointments.map((appt, index) => (
+            {filteredRecipients.length > 0 && (
+              <ScrollView style={styles.dropdown}>
+                {filteredRecipients.map((recipient, index) => (
                   <TouchableOpacity
                     key={index}
-                    onPress={() => {
-                      setEditingAppointment(appt);
-                      setEditStartTime(
-                        new Date(`1970-01-01T${appt.start_time}`)
-                      );
-                      setEditEndTime(new Date(`1970-01-01T${appt.end_time}`));
-                    }}
-                    style={[
-                      styles.appointmentCard,
-                      { flexDirection: "row", justifyContent: "space-between" },
-                    ]}
+                    style={styles.dropdownItem}
+                    onPress={() => selectRecipient(recipient)}
                   >
-                    <View style={{ flexDirection: "column" }}>
-                      <Text style={styles.appointmentText}>
-                        {userMap[appt.user_id] || "Unknown User"}{" "}
-                      </Text>
-                    </View>
-                    <Text style={styles.appointmentText}>
-                      {convertTo12HourFormat(appt.start_time)} -{" "}
-                      {convertTo12HourFormat(appt.end_time)}
+                    <Text style={styles.dropdownText}>
+                      {recipient.full_name} - {recipient.mobile_number}
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-            ) : (
+              </ScrollView>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddDetails}
+          >
+            <Text style={styles.addButtonText}>Add Details</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.closeBUtton}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableWithoutFeedback>
+    </View>
+  </TouchableWithoutFeedback>
+</Modal>
+          </View>
+          <View style={{ marginTop: 5 }}>
+            <Text style={[styles.text, { marginTop: 5, paddingLeft: 5 }]}>
+              <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
               <Text
-                style={{
-                  fontSize: 12,
-                  color: "gray",
-                  marginTop: 5,
-                  marginLeft: 5,
+                style={styles.addDetails}
+                onPress={async () => {
+                  await fetchProductList();
+                  setProductModalVisible(true);
                 }}
               >
-                No appointments found.
+                ADD SERVICE
               </Text>
-            )}
-          </ScrollView>
+            </Text>
+          </View>
+
+          {selectedProducts.length > 0 && (
+            <View style={styles.selectedProductsContainer}>
+              <ScrollView style={styles.selectedProductsScroll}>
+                {selectedProducts.map((item) => (
+                  <View key={item.id} style={styles.selectedProductRow}>
+                    {/* Product Name */}
+                    <Text style={styles.selectedProductName}>{item.Name}</Text>
+
+                    {/* Quantity Controls */}
+                    <View style={styles.qtyControl}>
+                      <TouchableOpacity
+                        onPress={() =>
+                          updateProductQuantity(item.id, item.quantity - 1)
+                        }
+                      >
+                        <FontAwesome name="minus" size={15} color={"red"} />
+                      </TouchableOpacity>
+
+                      <TextInput
+                        style={styles.qtyInput}
+                        keyboardType="numeric"
+                        value={String(item.quantity)}
+                        onChangeText={(value) =>
+                          updateProductQuantity(item.id, parseInt(value) || 1)
+                        }
+                      />
+
+                      <TouchableOpacity
+                        onPress={() =>
+                          updateProductQuantity(item.id, item.quantity + 1)
+                        }
+                      >
+                        <FontAwesome name="plus" size={15} color={"green"} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Price */}
+                    <Text style={styles.selectedProductPrice}>
+                      ₹{(item.quantity * item.Price).toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          <View style={styles.agentListContainer}>
+            {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {generateWeekDatesForAppointments().map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  disabled={item.isUnavailable} // ✅ Disable click on unavailable dates
+                  style={[
+                    styles.dayColumn,
+                    item.isUnavailable
+                      ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                      : selectedDateTime?.date ===
+                        item.date.toISOString().split("T")[0]
+                      ? {
+                          borderColor: "#007bff",
+                          borderWidth: 1,
+                          backgroundColor: "rgba(0,123,255,0.1)",
+                        }
+                      : {},
+                  ]}
+                  onPress={() => {
+                    if (!item.isUnavailable) {
+                      setSelectedDateTime({
+                        date: item.date.toISOString().split("T")[0],
+                        startTime: "",
+                        endTime: "",
+                        status: "Booked",
+                      });
+                    }
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.dayHeader,
+                      item.isUnavailable
+                        ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                        : selectedDateTime?.date ===
+                          item.date.toISOString().split("T")[0]
+                        ? {
+                            color: "#007bff",
+                          }
+                        : {},
+                    ]}
+                  >
+                    {item.date.toLocaleDateString("en-US", {
+                      weekday: "short",
+                    })}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.dateHeader,
+                      item.isUnavailable
+                        ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
+                        : selectedDateTime?.date ===
+                          item.date.toISOString().split("T")[0]
+                        ? {
+                            color: "#007bff",
+                          }
+                        : {},
+                    ]}
+                  >
+                    {item.date.toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.appointmentContainer}>
+            <ScrollView style={{ height: 350 }}>
+              {appointments.length > 0 ? (
+                <View style={{ marginTop: 3 }}>
+                  <Text style={{ fontSize: 12, marginLeft: 5 }}>
+                    Appointments:
+                  </Text>
+                  {appointments.map((appt, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => {
+                        setEditingAppointment(appt);
+                        setEditStartTime(
+                          new Date(`1970-01-01T${appt.start_time}`)
+                        );
+                        setEditEndTime(new Date(`1970-01-01T${appt.end_time}`));
+                      }}
+                      style={[
+                        styles.appointmentCard,
+                        {
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                        },
+                      ]}
+                    >
+                      <View style={{ flexDirection: "column" }}>
+                        <Text style={styles.appointmentText}>
+                          {userMap[appt.user_id] || "Unknown User"}{" "}
+                        </Text>
+                      </View>
+                      <Text style={styles.appointmentText}>
+                        {convertTo12HourFormat(appt.start_time)} -{" "}
+                        {convertTo12HourFormat(appt.end_time)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "gray",
+                    marginTop: 5,
+                    marginLeft: 5,
+                  }}
+                >
+                  No appointments found.
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+          {/* Agent Calendar Modal */}
         </View>
-        {/* Agent Calendar Modal */}
-      </View>
+      </ScrollView>
+
       {/* Add this modal at the end of the component */}
       <Modal
         visible={!!editingAppointment}
@@ -1268,11 +1324,11 @@ export default function Appointment() {
               <>
                 <View
                   style={{
-                    flexDirection: "row", // Arrange items horizontally
-                    justifyContent: "space-between", // Space between Start & End Time
+                    flexDirection: "row",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    width: "100%", // Ensure full width for spacing
-                    paddingHorizontal: 10, // Add padding for better spacing
+                    width: "100%",
+                    paddingHorizontal: 10,
                     marginTop: 5,
                   }}
                 >
@@ -1293,7 +1349,6 @@ export default function Appointment() {
                           : "Select Start Time"}
                       </Text>
                     </TouchableOpacity>
-
                     {showStartPicker && (
                       <DateTimePicker
                         value={startTime}
@@ -1304,7 +1359,17 @@ export default function Appointment() {
                       />
                     )}
                   </View>
-
+                  {selectedDateTime?.startTime && selectedDateTime?.endTime && (
+                    <Text
+                      style={{
+                        textAlign: "center",
+                        marginTop: 5,
+                        color: "red",
+                      }}
+                    >
+                      {selectedDateTime.duration}
+                    </Text>
+                  )}
                   {/* End Time Selection */}
                   <View
                     style={{ alignItems: "center", flex: 1, marginLeft: 10 }}
@@ -1325,7 +1390,6 @@ export default function Appointment() {
                           : "Select End Time"}
                       </Text>
                     </TouchableOpacity>
-
                     {showEndPicker && (
                       <DateTimePicker
                         value={endTime}
@@ -1357,12 +1421,14 @@ export default function Appointment() {
           </View>
         </View>
       )}
-
       <Footer />
     </>
   );
 }
 const styles = StyleSheet.create({
+  selectedProductsScroll: {
+    maxHeight: 110,
+  },
   timePickerContainer: {
     width: "100%",
   },
@@ -1530,7 +1596,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     textAlign: "center",
   },
-
 
   orderContainer: {
     marginBottom: 10,

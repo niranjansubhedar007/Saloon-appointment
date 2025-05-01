@@ -9,6 +9,8 @@ import {
   Alert,
   Linking,
   ScrollView,
+  TextInput,
+  Button,
 } from "react-native";
 import Footer from "./footer";
 import { createClient } from "@supabase/supabase-js";
@@ -30,6 +32,7 @@ export default function Customer() {
   const [viewMode, setViewMode] = useState("active"); // active | inactive | archived
   const [agents, setAgents] = useState([]);
   const [selectedAgents, setSelectedAgents] = useState([]);
+  const [searchText, setSearchText] = useState("");
 
   const API_APPOINTMENTS =
     "https://cqdinxweotvfamknmgap.supabase.co/rest/v1/Appointments";
@@ -75,27 +78,27 @@ export default function Customer() {
 
       for (const userId in userAppointmentsMap) {
         const allUserApps = userAppointmentsMap[userId];
-      
+
         // 👉 if an agent is selected, don't show any customers
         if (selectedAgents.length > 0) {
           continue;
         }
-      
+
         const latestAppointment = allUserApps.reduce((latest, current) =>
           new Date(current.appointment_date) > new Date(latest.appointment_date)
             ? current
             : latest
         );
-      
+
         const user = users.find((u) => u.id === Number(userId));
         if (!user) continue;
-      
+
         const userEntry = {
           ...user,
           lastAppointmentDate: formatDate(latestAppointment.appointment_date),
           lastAppointmentId: latestAppointment.id,
         };
-      
+
         if (latestAppointment.is_archive) {
           archivedUsers.push(userEntry);
         } else if (
@@ -106,7 +109,6 @@ export default function Customer() {
           activeUsers.push(userEntry);
         }
       }
-      
 
       setActiveUsers(activeUsers);
       setInactiveUsers(inactiveUsers);
@@ -141,7 +143,7 @@ export default function Customer() {
         setSelectedAgents(data);
         // Set default date to today
         const today = new Date().toISOString().split("T")[0];
-   
+
         // Fetch appointments for today
         fetchAppointments(data.id, today);
       } catch (error) {
@@ -151,10 +153,6 @@ export default function Customer() {
 
     fetchLoggedInAgent();
   }, []);
-
-
-
-
 
   const updateArchiveStatus = async (appointmentId, isArchive) => {
     try {
@@ -194,17 +192,21 @@ export default function Customer() {
     ]);
   };
 
-
-
   const getDisplayedUsers = () => {
-    switch (viewMode) {
-      case "archived":
-        return archivedUsers;
-      case "inactive":
-        return inactiveUsers;
-      case "active":
-        return activeUsers;
-    }
+    let users =
+      viewMode === "archived"
+        ? archivedUsers
+        : viewMode === "inactive"
+        ? inactiveUsers
+        : activeUsers;
+
+    if (searchText.trim() === "") return users;
+
+    return users.filter(
+      (user) =>
+        user.full_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        user.mobile_number?.includes(searchText)
+    );
   };
 
   return (
@@ -218,6 +220,14 @@ export default function Customer() {
               ? `Inactive Customers (${inactiveUsers.length})`
               : `Active Customers (${activeUsers.length})`}
           </Text>
+
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by Name or Mobile No"
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+
           <View style={styles.toggleWrapper}>
             <TouchableOpacity
               style={[
@@ -228,7 +238,6 @@ export default function Customer() {
             >
               <Text style={styles.toggleText}>Active</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.toggleBtn,
@@ -238,8 +247,6 @@ export default function Customer() {
             >
               <Text style={styles.toggleText}>Inactive</Text>
             </TouchableOpacity>
-
-            {/* Always show Archived button, but don't highlight unless selected */}
             {viewMode !== "active" && (
               <TouchableOpacity
                 style={[
@@ -257,56 +264,57 @@ export default function Customer() {
         {loading ? (
           <ActivityIndicator size="large" color="#2196F3" />
         ) : (
-          <View style={{ height: 610  }}>
-          <FlatList
-            data={getDisplayedUsers()}
-            keyExtractor={(item) => item.id.toString()}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>No users found</Text>
-            }
-            renderItem={({ item }) => (
-              <View style={styles.itemContainer}>
-                <View style={styles.card}>
-                  <Text style={styles.userName}>{item.full_name}</Text>
-                  <Text style={styles.userInfo}>{item.mobile_number}</Text>
-                  <Text style={styles.userInfo}>
-                    Last Visit: {item.lastAppointmentDate || "N/A"}
-                  </Text>
-                </View>
-                <View style={{ justifyContent: "center", gap: 8 }}>
-                  {viewMode !== "active" && (
+          <View style={{ height: 530 }}>
+            <FlatList
+              data={getDisplayedUsers()}
+              keyExtractor={(item) => item.id.toString()}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No users found</Text>
+              }
+              renderItem={({ item }) => (
+                <View style={styles.itemContainer}>
+                  <View style={styles.card}>
+                    <Text style={styles.userName}>{item.full_name}</Text>
+                    <Text style={styles.userInfo}>{item.mobile_number}</Text>
+                    <Text style={styles.userInfo}>
+                      Last Visit: {item.lastAppointmentDate || "N/A"}
+                    </Text>
+                  </View>
+                  <View style={{ justifyContent: "center", gap: 8 }}>
+                    {viewMode !== "active" && (
+                      <TouchableOpacity
+                        style={[
+                          styles.iconButton,
+                          viewMode === "archived"
+                            ? styles.unarchiveButton
+                            : styles.archiveButton,
+                        ]}
+                        onPress={() =>
+                          viewMode === "archived"
+                            ? handleUnarchive(item)
+                            : handleArchive(item)
+                        }
+                      >
+                        <FontAwesome
+                          name={viewMode === "archived" ? "eye-slash" : "eye"}
+                          size={16}
+                          color="white"
+                        />
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity
-                      style={[
-                        styles.iconButton,
-                        viewMode === "archived"
-                          ? styles.unarchiveButton
-                          : styles.archiveButton,
-                      ]}
+                      style={[styles.iconButton, styles.callButton]}
                       onPress={() =>
-                        viewMode === "archived"
-                          ? handleUnarchive(item)
-                          : handleArchive(item)
+                        Linking.openURL(`tel:${item.mobile_number}`)
                       }
                     >
-                      <FontAwesome
-                        name={viewMode === "archived" ? "eye-slash" : "eye"}
-                        size={16}
-                        color="white"
-                      />
+                      <FontAwesome name="phone" size={16} color="white" />
                     </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    style={[styles.iconButton, styles.callButton]}
-                    onPress={() => Linking.openURL(`tel:${item.mobile_number}`)}
-                  >
-                    <FontAwesome name="phone" size={16} color="white" />
-                  </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            )}
-          />
-        </View>
-        
+              )}
+            />
+          </View>
         )}
       </View>
       <Footer />
@@ -315,6 +323,15 @@ export default function Customer() {
 }
 
 const styles = StyleSheet.create({
+  searchInput: {
+    height: 40,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+
   selectedAgentName: {
     color: "#007bff",
   },
