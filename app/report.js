@@ -38,7 +38,13 @@ const Report = () => {
   const [completedAppointments, setCompletedAppointments] = useState([]);
   const [users, setUsers] = useState([]); // Add a state to store users
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
-  const [orderDetails, setOrderDetails] = useState([]);
+  const [orderDetails, setOrderDetails] = useState({
+    items: [],
+    discount: {
+      amount: 0,
+      type: null,
+    },
+  });
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [selectedType, setSelectedType] = useState("today"); // default selection
   const [selectedAgentId, setSelectedAgentId] = useState(null);
@@ -229,17 +235,34 @@ const Report = () => {
   }, []);
   const fetchOrderDetailsByAppointment = async (appointmentId, agentId) => {
     try {
-      const { data, error } = await supabase
+      // Fetch order details
+      const { data: orderDetails, error: detailsError } = await supabase
         .from("Order_details")
         .select("*")
         .eq("appointment_id", appointmentId);
 
-      if (error) throw error;
+      if (detailsError) throw detailsError;
 
-      setOrderDetails(data);
+      // Fetch the order to get discount information
+      const { data: orderData, error: orderError } = await supabase
+        .from("Orders")
+        .select("discount_amount, discount_type")
+        .eq("appointment_id", appointmentId)
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Set the state with the new structure
+      setOrderDetails({
+        items: orderDetails || [],
+        discount: {
+          amount: orderData?.discount_amount || 0,
+          type: orderData?.discount_type || null,
+        },
+      });
       setShowOrderDetails(true);
       setSelectedAppointmentId(appointmentId);
-      setSelectedAgentId(agentId); // Set the agent ID from the appointment
+      setSelectedAgentId(agentId);
     } catch (error) {
       console.error("Error fetching order details:", error.message);
     }
@@ -247,6 +270,12 @@ const Report = () => {
   const getAgentName = (agentId) => {
     const agent = agents.find((agent) => agent.id === agentId);
     return agent ? agent.full_name : "Unknown Agent"; // Use full_name
+  };
+  const calculateModalGrandTotal = () => {
+    return orderDetails.items.reduce(
+      (total, item) => total + (item.menu_rate_total || 0),
+      0
+    );
   };
 
   return (
@@ -431,10 +460,9 @@ const Report = () => {
                 backgroundColor: "#f0f0f0",
               }}
             >
-              <Text style={{ width: "33%", fontSize: 12 }}>User</Text>
-              <Text style={{ width: "32%", fontSize: 12 }}>Time</Text>
-              <Text style={{ width: "13%", fontSize: 12 }}>Dis</Text>
-              <Text style={{ width: "14%", fontSize: 12 }}>Total</Text>
+              <Text style={{ width: "37%", fontSize: 12 }}>User</Text>
+              <Text style={{ width: "38%", fontSize: 12 }}>Time</Text>
+              <Text style={{ width: "16%", fontSize: 12 }}>Total</Text>
               <Text style={{ width: "11%", fontSize: 12 }}>View</Text>
             </View>
           )}
@@ -453,29 +481,16 @@ const Report = () => {
                   borderColor: "#eee",
                 }}
               >
-                <Text style={{ width: "33%", fontSize: 11 }}>
+                <Text style={{ width: "37%", fontSize: 11 }}>
                   {getUserFullName(item.user_id)}
                 </Text>
 
-                <Text style={{ width: "34%", fontSize: 11 }}>
-                  {formatTo12Hour(item.start_time)}{" "}-{" "}
+                <Text style={{ width: "39%", fontSize: 11 }}>
+                  {formatTo12Hour(item.start_time)} -{" "}
                   {formatTo12Hour(item.end_time)}
                 </Text>
-                <View style={{ width: "13%" }}>
-                  {item.Orders.map((order, index) => (
-                    <Text
-                      key={index}
-                      style={{
-                        color: order.discount_type === "add" ? "green" : "red",
-                        fontWeight: "bold",
-                        fontSize: 11,
-                      }}
-                    >
-                      {order.discount_amount || 0}
-                    </Text>
-                  ))}
-                </View>
-                <Text style={{ width: "15%", fontSize: 11 }}>
+
+                <Text style={{ width: "16%", fontSize: 11 }}>
                   {item.Orders?.reduce(
                     (acc, order) => acc + (order.grand_total || 0),
                     0
@@ -488,7 +503,7 @@ const Report = () => {
                       fetchOrderDetailsByAppointment(item.id, item.agent_id)
                     }
                   >
-                    <FontAwesome name="eye" size={15} color="#007bff" />
+                    <FontAwesome name="eye" size={17} color="#007bff" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -502,7 +517,7 @@ const Report = () => {
           transparent={true}
           onRequestClose={() => {
             setShowOrderDetails(false);
-            setOrderDetails([]);
+            setOrderDetails({ items: [], discount: { amount: 0, type: null } });
             setSelectedAppointmentId(null);
           }}
         >
@@ -512,14 +527,17 @@ const Report = () => {
                 style={styles.closeIconContainer}
                 onPress={() => {
                   setShowOrderDetails(false);
-                  setOrderDetails([]);
+                  setOrderDetails({
+                    items: [],
+                    discount: { amount: 0, type: null },
+                  });
                   setSelectedAppointmentId(null);
                 }}
               >
                 <FontAwesome name="close" size={20} color="red" />
               </TouchableOpacity>
 
-              {orderDetails.length === 0 ? (
+              {orderDetails.items && orderDetails.items.length === 0 ? (
                 <Text>No order details found.</Text>
               ) : (
                 <>
@@ -533,7 +551,7 @@ const Report = () => {
                   >
                     Order Details
                   </Text>
-                  {/* In the Modal component */}
+
                   {selectedAgents.length === 0 && (
                     <Text
                       style={{
@@ -546,14 +564,56 @@ const Report = () => {
                       Handle by {getAgentName(selectedAgentId)}
                     </Text>
                   )}
+
                   {/* Render each order detail */}
-                  {orderDetails.map((detail, index) => (
+                  {orderDetails.items.map((detail, index) => (
                     <View key={index} style={styles.appointmentTable}>
                       <Text style={{ width: "60%" }}>{detail.menu_name}</Text>
                       <Text>x {detail.qty_sold}</Text>
                       <Text>₹{detail.menu_rate_total}</Text>
                     </View>
                   ))}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 10,
+                      borderTopWidth: 1,
+                      paddingTop: 10,
+                    }}
+                  >
+                    <Text>
+                       Total:
+                    </Text>
+                    <Text> ₹{" "}{calculateModalGrandTotal()}</Text>
+                  </View>
+
+                  {/* Show Discount if it exists */}
+                  {orderDetails.discount.amount > 0 && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        paddingHorizontal: 10,
+                        marginTop: 10,
+                        borderTopWidth: 1,
+                        paddingTop: 10,
+                      }}
+                    >
+                      <Text>Discount: </Text>
+                      <Text
+                        style={{
+                          color:
+                            orderDetails.discount.type === "add"
+                              ? "green"
+                              : "red",
+                          marginLeft: 5,
+                        }}
+                      >
+                        ₹ {orderDetails.discount.amount}
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Calculate and show Grand Total */}
                   <View
@@ -562,17 +622,23 @@ const Report = () => {
                     <Text
                       style={{
                         fontWeight: "bold",
-                        fontSize: 16,
+                        fontSize: 18,
                         textAlign: "right",
                         color: "#007bff",
                         paddingRight: 7,
                       }}
                     >
-                      Total: ₹{" "}
-                      {orderDetails.reduce(
+                     Grand Total: ₹{" "}
+                      {orderDetails.items.reduce(
                         (total, item) => total + (item.menu_rate_total || 0),
                         0
-                      )}
+                      ) -
+                        (orderDetails.discount.type === "subtract"
+                          ? orderDetails.discount.amount
+                          : 0) +
+                        (orderDetails.discount.type === "add"
+                          ? orderDetails.discount.amount
+                          : 0)}
                     </Text>
                   </View>
                 </>
@@ -738,8 +804,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
     paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
   },
   userName: {
     fontSize: 12,

@@ -92,6 +92,9 @@ export default function Index() {
     GoogleSignin.configure({
       webClientId:
         "1040363962427-av0odib2simltits2pr6nlirma84s14d.apps.googleusercontent.com",
+      iosClientId:
+        "1040363962427-un3654f9npok5p2oai6qrgkufu5bii3h.apps.googleusercontent.com",
+      offlineAccess: true,
       scopes: ["https://www.googleapis.com/auth/userinfo.email"],
     });
 
@@ -102,13 +105,13 @@ export default function Index() {
     };
   }, []);
 
-  const storeToken = async (token) => {
-    try {
-      await AsyncStorage.setItem("@token", token);
-    } catch (error) {
-      console.error("Error storing the token:", error);
-    }
-  };
+  // const storeToken = async (token) => {
+  //   try {
+  //     await AsyncStorage.setItem("@token", token);
+  //   } catch (error) {
+  //     console.error("Error storing the token:", error);
+  //   }
+  // };
 
   const fetchUserRole = async (email) => {
     try {
@@ -146,7 +149,7 @@ export default function Index() {
   const onGoogleButtonPress = async () => {
     try {
       await GoogleSignin.hasPlayServices();
-      const response = await GoogleSignin.signIn();
+      // const response = await GoogleSignin.signIn();
       const tokens = await GoogleSignin.getTokens();
       const accessToken = tokens.accessToken;
       const userInfo = await GoogleSignin.getCurrentUser();
@@ -211,7 +214,7 @@ export default function Index() {
 
         // Optional: You might want to set a dummy agentId or fetch actual owner ID
         await AsyncStorage.setItem("@agentId", "owner_id");
-Alert.alert("Success", "Welcome Owner!");
+        Alert.alert("Success", "Welcome Owner!");
         router.push("/report");
       } else {
         setError("Invalid username or password");

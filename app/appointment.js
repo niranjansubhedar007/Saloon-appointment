@@ -10,7 +10,7 @@ import {
   TextInput,
   Alert,
   ScrollView,
-  TouchableWithoutFeedback ,
+  TouchableWithoutFeedback,
   Platform,
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
@@ -404,6 +404,12 @@ export default function Appointment() {
   const handleConfirmBooking = async () => {
     setBookingError("");
 
+    // Clear saved recipient from AsyncStorage and state
+    await AsyncStorage.removeItem("savedRecipient");
+    await AsyncStorage.removeItem("recipientName");
+    setSavedRecipient(null); // Clear the state immediately
+    setRecipientName(""); // Reset recipient name
+
     if (
       !selectedDateTime?.date ||
       !selectedDateTime?.startTime ||
@@ -567,7 +573,7 @@ export default function Appointment() {
 
       setSelectedProducts([]);
       setAgentCalendarModalVisible(false);
-      Alert.alert("Success", `Appointment Book successfully!`);
+      Alert.alert("Success", `Appointment booked successfully!`);
       await fetchAppointments(agentId, selectedDateTime.date);
       setIsSelectedAgent(false); // Close product modal after booking
     } catch (error) {
@@ -723,7 +729,7 @@ export default function Appointment() {
       // Retrieve savedRecipient
       const savedData = await AsyncStorage.getItem("savedRecipient");
       const savedName = await AsyncStorage.getItem("recipientName");
-  
+
       if (savedData) {
         try {
           const parsedData = JSON.parse(savedData);
@@ -852,35 +858,54 @@ export default function Appointment() {
       .toString()
       .padStart(2, "0")}/${year}`;
   };
-  const handleMobileNumberChange = async (text) => {
-    setMobileNumber(text);
-    fetchFilteredRecipients(text, "mobile_number"); // ✅ Search by mobile number
-  };
-
-  const handleRecipientNameChange = async (text) => {
-    setRecipientName(text);
-    fetchFilteredRecipients(text, "full_name"); // ✅ Search by name
-  };
 
   const fetchFilteredRecipients = async (text, field) => {
     if (text.length >= 3) {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("User")
-          .select("id, full_name, mobile_number")
-          .ilike(field, `%${text}%`); // ✅ Search by mobile or name dynamically
+          .select("id, full_name, mobile_number");
+
+        // If searching by name, we need to also check if the mobile number exists
+        if (field === "full_name") {
+          // Only show results where name matches AND mobile number is in our database
+          query = query
+            .ilike("full_name", `%${text}%`)
+            .not("mobile_number", "is", null); // Ensure mobile number exists
+        }
+        // If searching by mobile number, just do the normal search
+        else if (field === "mobile_number") {
+          query = query.ilike("mobile_number", `%${text}%`);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
-        console.log("Filtered Data:", data); // ✅ Debugging log
-
-        setFilteredRecipients(data || []);
+        // Additional filtering for name search to ensure mobile number matches
+        if (field === "full_name" && mobileNumber) {
+          const filteredData = data.filter(
+            (recipient) => recipient.mobile_number === mobileNumber
+          );
+          setFilteredRecipients(filteredData || []);
+        } else {
+          setFilteredRecipients(data || []);
+        }
       } catch (error) {
         console.error("Error fetching matching users:", error.message);
       }
     } else {
-      setFilteredRecipients([]); // ✅ Clear dropdown if less than 3 characters
+      setFilteredRecipients([]);
     }
+  };
+  const handleRecipientNameChange = (text) => {
+    setRecipientName(text);
+    fetchFilteredRecipients(text, "full_name");
+  };
+
+  const handleMobileNumberChange = (text) => {
+    setMobileNumber(text);
+    fetchFilteredRecipients(text, "mobile_number");
   };
 
   const convertTo12HourFormats = (timeString) => {
@@ -894,9 +919,98 @@ export default function Appointment() {
     setSelectedProducts([]);
   };
 
+  const handleUnavailableDateClick = async (selectedDate) => {
+    Alert.alert(
+      "Cancel Unavailability",
+      `Do you want to remove unavailability for ${selectedDate}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "OK",
+          onPress: async () => {
+            try {
+              // Fetch the record where selectedDate falls within start_date and end_date
+              const { data, error } = await supabase
+                .from("Unavailability")
+                .select("id, start_date, end_date, agent_id")
+                .eq("agent_id", selectedAgent.id)
+                .lte("start_date", selectedDate)
+                .gte("end_date", selectedDate)
+                .maybeSingle();
 
+              if (error) throw error;
+              if (!data) {
+                Alert.alert("Error", "No matching record found.");
+                return;
+              }
 
-  
+              const { id, start_date, end_date, agent_id } = data;
+
+              // Convert to Date objects for easy comparison
+              const startDateObj = new Date(start_date);
+              const endDateObj = new Date(end_date);
+              const selectedDateObj = new Date(selectedDate);
+
+              if (startDateObj.getTime() === endDateObj.getTime()) {
+                // Case 1: Single-day range → Delete the record
+                await supabase.from("Unavailability").delete().eq("id", id);
+              } else if (selectedDateObj.getTime() === startDateObj.getTime()) {
+                // Case 2: Selected date is the start date → Update start_date to next day
+                const newStartDate = new Date(startDateObj);
+                newStartDate.setDate(newStartDate.getDate() + 1);
+                await supabase
+                  .from("Unavailability")
+                  .update({
+                    start_date: newStartDate.toISOString().split("T")[0],
+                  })
+                  .eq("id", id);
+              } else if (selectedDateObj.getTime() === endDateObj.getTime()) {
+                // Case 3: Selected date is the end date → Update end_date to previous day
+                const newEndDate = new Date(endDateObj);
+                newEndDate.setDate(newEndDate.getDate() - 1);
+                await supabase
+                  .from("Unavailability")
+                  .update({ end_date: newEndDate.toISOString().split("T")[0] })
+                  .eq("id", id);
+              } else {
+                // Case 4: Selected date is in between → Split into two records
+                const beforeSplitEnd = new Date(selectedDateObj);
+                beforeSplitEnd.setDate(beforeSplitEnd.getDate() - 1);
+
+                const afterSplitStart = new Date(selectedDateObj);
+                afterSplitStart.setDate(afterSplitStart.getDate() + 1);
+
+                await supabase
+                  .from("Unavailability")
+                  .update({
+                    end_date: beforeSplitEnd.toISOString().split("T")[0],
+                  })
+                  .eq("id", id);
+
+                await supabase.from("Unavailability").insert([
+                  {
+                    agent_id,
+                    start_date: afterSplitStart.toISOString().split("T")[0],
+                    end_date: endDateObj.toISOString().split("T")[0],
+                    start_time: "00:00:00",
+                    end_time: "23:59:59",
+                  },
+                ]);
+              }
+
+              // ✅ Refresh unavailable dates after update
+              fetchUnavailableDates(selectedAgent.id);
+              Alert.alert("Success", "Unavailability updated successfully.");
+            } catch (error) {
+              console.error("Error updating unavailable date:", error.message);
+              Alert.alert("Error", "Failed to update unavailability.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <>
       <ScrollView>
@@ -924,8 +1038,8 @@ export default function Appointment() {
               </Text>
               {savedRecipient && (
                 <Text style={styles.savedDetails}>
-                  {savedRecipient.full_name || "Unknown"} -{" "}
-                  {savedRecipient.mobile_number || "Unknown"}
+                  {savedRecipient.full_name || "Select Customer"} -{" "}
+                  {savedRecipient.mobile_number || ""}
                 </Text>
               )}
             </View>
@@ -997,73 +1111,78 @@ export default function Appointment() {
               </View>
             </Modal>
 
+            <Modal
+              animationType="slide"
+              transparent={true}
+              visible={modalVisible}
+              onRequestClose={() => setModalVisible(false)}
+            >
+              <TouchableWithoutFeedback
+                onPress={() => setFilteredRecipients([])}
+              >
+                <View style={styles.modalOverlay}>
+                  <TouchableWithoutFeedback onPress={() => {}}>
+                    <View style={styles.modalContent}>
+                      <Text style={styles.modalTitle}>
+                        Booking for someone else
+                      </Text>
+                      <Text style={styles.modalSubtitle}>
+                        We will share booking details on recipient's mobile
+                        number.
+                      </Text>
 
-<Modal
-  animationType="slide"
-  transparent={true}
-  visible={modalVisible}
-  onRequestClose={() => setModalVisible(false)}
->
-  <TouchableWithoutFeedback onPress={() => setFilteredRecipients([])}>
-    <View style={styles.modalOverlay}>
-      <TouchableWithoutFeedback onPress={() => {}}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Booking for someone else</Text>
-          <Text style={styles.modalSubtitle}>
-            We will share booking details on recipient's mobile number.
-          </Text>
+                      <View style={styles.inputContainer}>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Mobile Number"
+                          keyboardType="phone-pad"
+                          value={mobileNumber}
+                          onChangeText={handleMobileNumberChange}
+                          placeholderTextColor="#777"
+                          maxLength={10}
+                        />
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Recipient's Name"
+                          value={recipientName}
+                          onChangeText={handleRecipientNameChange}
+                          placeholderTextColor="#777"
+                        />
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Mobile Number"
-              keyboardType="phone-pad"
-              value={mobileNumber}
-              onChangeText={handleMobileNumberChange}
-              placeholderTextColor="#777"
-              maxLength={10}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Recipient's Name"
-              value={recipientName}
-              onChangeText={handleRecipientNameChange}
-              placeholderTextColor="#777"
-            />
-
-            {filteredRecipients.length > 0 && (
-              <ScrollView style={styles.dropdown}>
-                {filteredRecipients.map((recipient, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.dropdownItem}
-                    onPress={() => selectRecipient(recipient)}
-                  >
-                    <Text style={styles.dropdownText}>
-                      {recipient.full_name} - {recipient.mobile_number}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddDetails}
-          >
-            <Text style={styles.addButtonText}>Add Details</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.closeBUtton}
-            onPress={() => setModalVisible(false)}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableWithoutFeedback>
-    </View>
-  </TouchableWithoutFeedback>
-</Modal>
+                        {filteredRecipients.length > 0 && (
+                          <ScrollView style={styles.dropdown}>
+                            {filteredRecipients.map((recipient, index) => (
+                              <TouchableOpacity
+                                key={index}
+                                style={styles.dropdownItem}
+                                onPress={() => selectRecipient(recipient)}
+                              >
+                                <Text style={styles.dropdownText}>
+                                  {recipient.full_name} -{" "}
+                                  {recipient.mobile_number}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        style={styles.addButton}
+                        onPress={handleAddDetails}
+                      >
+                        <Text style={styles.addButtonText}>Add Details</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.closeBUtton}
+                        onPress={() => setModalVisible(false)}
+                      >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableWithoutFeedback>
+                </View>
+              </TouchableWithoutFeedback>
+            </Modal>
           </View>
           <View style={{ marginTop: 5 }}>
             <Text style={[styles.text, { marginTop: 5, paddingLeft: 5 }]}>
@@ -1126,74 +1245,75 @@ export default function Appointment() {
             </View>
           )}
           <View style={styles.agentListContainer}>
-            {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
-
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {generateWeekDatesForAppointments().map((item, index) => (
-                <TouchableOpacity
-                  key={index}
-                  disabled={item.isUnavailable} // ✅ Disable click on unavailable dates
-                  style={[
-                    styles.dayColumn,
-                    item.isUnavailable
-                      ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                      : selectedDateTime?.date ===
-                        item.date.toISOString().split("T")[0]
-                      ? {
-                          borderColor: "#007bff",
-                          borderWidth: 1,
-                          backgroundColor: "rgba(0,123,255,0.1)",
-                        }
-                      : {},
-                  ]}
-                  onPress={() => {
-                    if (!item.isUnavailable) {
-                      setSelectedDateTime({
-                        date: item.date.toISOString().split("T")[0],
-                        startTime: "",
-                        endTime: "",
-                        status: "Booked",
-                      });
-                    }
-                  }}
-                >
-                  <Text
+              {generateWeekDatesForAppointments().map((item, index) => {
+                const formattedDate = item.date.toISOString().split("T")[0];
+
+                return (
+                  <TouchableOpacity
+                    key={index}
                     style={[
-                      styles.dayHeader,
+                      styles.dayColumn,
                       item.isUnavailable
-                        ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                        : selectedDateTime?.date ===
-                          item.date.toISOString().split("T")[0]
                         ? {
-                            color: "#007bff",
+                            backgroundColor: "rgba(230, 95, 95, 0.1)",
+                            opacity: 0.5,
+                            borderColor: "#ff0000",
+                            borderWidth: 1,
+                          }
+                        : selectedDateTime?.date === formattedDate
+                        ? {
+                            borderColor: "#007bff",
+                            borderWidth: 1,
+                            backgroundColor: "rgba(0,123,255,0.1)",
                           }
                         : {},
                     ]}
+                    onPress={() => {
+                      if (item.isUnavailable) {
+                        handleUnavailableDateClick(formattedDate);
+                      } else {
+                        setSelectedDateTime({
+                          date: formattedDate,
+                          startTime: "",
+                          endTime: "",
+                          status: "Booked",
+                        });
+                      }
+                    }}
                   >
-                    {item.date.toLocaleDateString("en-US", {
-                      weekday: "short",
-                    })}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.dateHeader,
-                      item.isUnavailable
-                        ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                        : selectedDateTime?.date ===
-                          item.date.toISOString().split("T")[0]
-                        ? {
-                            color: "#007bff",
-                          }
-                        : {},
-                    ]}
-                  >
-                    {item.date.toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.dayHeader,
+                        item.isUnavailable
+                          ? { color: "#ff0000" } // Make unavailable dates red
+                          : selectedDateTime?.date === formattedDate
+                          ? { color: "#007bff" }
+                          : {},
+                      ]}
+                    >
+                      {item.date.toLocaleDateString("en-US", {
+                        weekday: "short",
+                      })}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dateHeader,
+                        item.isUnavailable
+                          ? { color: "#ff0000" } // Make unavailable dates red
+                          : selectedDateTime?.date === formattedDate
+                          ? { color: "#007bff" }
+                          : {},
+                      ]}
+                    >
+                      {item.date.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
 

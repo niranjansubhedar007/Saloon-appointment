@@ -1041,79 +1041,73 @@ export default function Billing() {
     <>
     <ScrollView>
       <View style={{ padding: 10 }}>
-        <View style={styles.agentListContainer}>
-          {/* <Text style={styles.agentListTitle}>Choose Professional</Text> */}
-    
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {generateWeekDatesForAppointments().map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.dayColumn,
-                  item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 }
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      borderColor: "#007bff",
-                      borderWidth: 1,
-                      backgroundColor: "rgba(0,123,255,0.1)",
-                      }
-                    : {},
-                ]}
-                onPress={() => {
-                  const selectedDate = item.date.toISOString().split("T")[0];
+     <View style={styles.agentListContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {generateWeekDatesForAppointments().map((item, index) => {
+                const formattedDate = item.date.toISOString().split("T")[0];
 
-                  if (item.isUnavailable) {
-                    handleUnavailableDateClick(selectedDate);
-                  } else {
-                    setSelectedDateTime({
-                      date: selectedDate,
-                      startTime: "",
-                      endTime: "",
-                      status: "Booked",
-                    });
-                  }
-                }}
-              >
-                <Text
-                  style={[
-                    styles.dayHeader,
-                    item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.dayColumn,
+                      item.isUnavailable
+                        ? { backgroundColor: "rgba(230, 95, 95, 0.1)", opacity: 0.5 , borderColor: "#ff0000" , borderWidth: 1}
+                        : selectedDateTime?.date === formattedDate
+                        ? {
+                            borderColor: "#007bff",
+                            borderWidth: 1,
+                            backgroundColor: "rgba(0,123,255,0.1)",
+                          }
+                        : {},
+                    ]}
+                    onPress={() => {
+                      if (item.isUnavailable) {
+                        handleUnavailableDateClick(formattedDate);
+                      } else {
+                        setSelectedDateTime({
+                          date: formattedDate,
+                          startTime: "",
+                          endTime: "",
+                          status: "Booked",
+                        });
                       }
-                    : {},
-                ]}
-                >
-                  {item.date.toLocaleDateString("en-US", { weekday: "short" })}
-                </Text>
-                <Text
-                  style={[
-                    styles.dateHeader,
-                    item.isUnavailable
-                    ? { backgroundColor: "rgba(0,0,0,0.1)", opacity: 0.5 } // ✅ Blur effect
-                    : selectedDateTime?.date ===
-                      item.date.toISOString().split("T")[0]
-                    ? {
-                      color: "#007bff",
-                      }
-                    : {},
-                ]}
-                >
-                  {item.date.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dayHeader,
+                        item.isUnavailable
+                          ? { color: "#ff0000" } // Make unavailable dates red
+                          : selectedDateTime?.date === formattedDate
+                          ? { color: "#007bff" }
+                          : {},
+                      ]}
+                    >
+                      {item.date.toLocaleDateString("en-US", {
+                        weekday: "short",
+                      })}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dateHeader,
+                        item.isUnavailable
+                          ? { color: "#ff0000" } // Make unavailable dates red
+                          : selectedDateTime?.date === formattedDate
+                          ? { color: "#007bff" }
+                          : {},
+                      ]}
+                    >
+                      {item.date.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         <View style={styles.appointmentContainer}>
           <ScrollView style={{ height: 570 }}>
             {appointments.length > 0 ? (
