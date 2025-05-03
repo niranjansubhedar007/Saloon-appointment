@@ -34,6 +34,9 @@ export default function Billing() {
   const [agents, setAgents] = useState([]);
   const [agentCalendarModalVisible, setAgentCalendarModalVisible] =
     useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [qrCodes, setQrCodes] = useState([]);
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [showQrCode, setShowQrCode] = useState(false);
   const [completedAssignmentsCount, setCompletedAssignmentsCount] = useState(0);
@@ -209,16 +212,16 @@ export default function Billing() {
     const fetchLoggedInAgent = async () => {
       const agentId = await AsyncStorage.getItem("@agentId");
       if (!agentId) return;
-  
+
       try {
         const { data, error } = await supabase
           .from("Agents")
           .select("id, full_name, mobile_number")
           .eq("id", agentId)
           .single();
-  
+
         if (error) throw error;
-  
+
         setAgents(data ? [data] : []);
         // Automatically select the logged-in agent
         setSelectedAgent(data);
@@ -236,10 +239,10 @@ export default function Billing() {
         console.error("Error fetching agent:", error.message);
       }
     };
-  
+
     fetchLoggedInAgent();
   }, []);
-  
+
   const fetchLatestUser = async () => {
     try {
       // First, check if there's a saved recipient in AsyncStorage
@@ -443,7 +446,38 @@ export default function Billing() {
       console.error("❌ Error updating quantity and totals:", error.message);
     }
   };
+  const fetchQRCodes = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
+      // Since you know the exact filename, we can directly get its public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("qr-codes").getPublicUrl("QR-code.png");
+
+      // Verify the URL is accessible
+      const response = await fetch(publicUrl);
+      if (!response.ok) throw new Error("Failed to load QR code image");
+
+      setQrCodes([
+        {
+          url: publicUrl,
+          name: "QR-code.png",
+          id: "1", // Since we only have one file, we can use a simple ID
+        },
+      ]);
+    } catch (err) {
+      console.error("Error fetching QR code:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQRCodes();
+  }, []);
   const fetchUnavailableDates = async (agentId) => {
     if (!agentId) return;
 
@@ -1022,26 +1056,44 @@ export default function Billing() {
   useEffect(() => {
     if (paymentMethod && selectedOrder) {
       const selectedProductsTotal = selectedProducts
-        .filter(p => !orderDetails.some(d => d.menu_name === p.Name))
+        .filter((p) => !orderDetails.some((d) => d.menu_name === p.Name))
         .reduce((sum, p) => sum + p.quantity * p.Price, 0);
-  
+
       const discountValue = parseFloat(discountAmount || 0);
       const baseTotal = selectedOrder.grand_total + selectedProductsTotal;
-      const grandTotal = discountType === 'add' 
-        ? baseTotal + discountValue 
-        : baseTotal - discountValue;
-  
+      const grandTotal =
+        discountType === "add"
+          ? baseTotal + discountValue
+          : baseTotal - discountValue;
+
       setPaymentAmount(grandTotal.toFixed(2));
     }
-  }, [paymentMethod, selectedOrder, selectedProducts, discountAmount, discountType]);
+  }, [
+    paymentMethod,
+    selectedOrder,
+    selectedProducts,
+    discountAmount,
+    discountType,
+  ]);
   const toggleQrCode = () => {
     setShowQrCode(!showQrCode);
   };
+
+  const closeButtonModal = () => {
+    setModalVisible(false);
+    setSelectedProducts([]);
+    setSelectedOrder(null);
+    setSelectedAppointment(null);
+    setPaymentMethod(null);
+    setPaymentAmount("");
+    setDiscountAmount("");
+    setDiscountType("subtract");
+  };
   return (
     <>
-    <ScrollView>
-      <View style={{ padding: 10 }}>
-     <View style={styles.agentListContainer}>
+      <ScrollView>
+        <View style={{ padding: 10 }}>
+          <View style={styles.agentListContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {generateWeekDatesForAppointments().map((item, index) => {
                 const formattedDate = item.date.toISOString().split("T")[0];
@@ -1052,7 +1104,12 @@ export default function Billing() {
                     style={[
                       styles.dayColumn,
                       item.isUnavailable
-                        ? { backgroundColor: "rgba(230, 95, 95, 0.1)", opacity: 0.5 , borderColor: "#ff0000" , borderWidth: 1}
+                        ? {
+                            backgroundColor: "rgba(230, 95, 95, 0.1)",
+                            opacity: 0.5,
+                            borderColor: "#ff0000",
+                            borderWidth: 1,
+                          }
                         : selectedDateTime?.date === formattedDate
                         ? {
                             borderColor: "#007bff",
@@ -1108,424 +1165,376 @@ export default function Billing() {
               })}
             </ScrollView>
           </View>
-        <View style={styles.appointmentContainer}>
-          <ScrollView style={{ height: 570 }}>
-            {appointments.length > 0 ? (
-              <View style={{ marginTop: 3 }}>
-                <Text style={{ fontSize: 12, marginLeft: 5 }}>
-                  Appointments:
+          <View style={styles.appointmentContainer}>
+            <ScrollView style={{ height: 570 }}>
+              {appointments.length > 0 ? (
+                <View style={{ marginTop: 3 }}>
+                  <Text style={{ fontSize: 12, marginLeft: 5 }}>
+                    Appointments:
+                  </Text>
+                  {appointments.map((appt, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => handleCompletePress(appt)}
+                    >
+                      <View style={styles.appointmentCard}>
+                        <View>
+                          <Text style={styles.appointmentText}>
+                            {userMap[appt.user_id] || "Unknown User"}{" "}
+                          </Text>
+
+                          <Text style={styles.appointmentText}>
+                            {convertTo12HourFormat(appt.start_time)} -{" "}
+                            {convertTo12HourFormat(appt.end_time)}
+                          </Text>
+                        </View>
+                        <View style={styles.buttonContainer}>
+                          {/* Complete Button */}
+
+                          {/* Cancel Button */}
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.cancelButton]}
+                            onPress={() => handleCancelAppointment(appt.id)}
+                          >
+                            <FontAwesome name="times" size={15} color="white" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.recallButton]}
+                            onPress={() => {
+                              if (!selectedAppointmentRef.current) {
+                                Alert.alert(
+                                  "Error",
+                                  "No appointment available."
+                                );
+                                return;
+                              }
+
+                              const userId =
+                                selectedAppointmentRef.current.user_id;
+
+                              if (!userId) {
+                                Alert.alert(
+                                  "Error",
+                                  "No user ID found in appointment."
+                                );
+                                return;
+                              }
+
+                              const userPhoneNumber = userMapNumber[userId];
+
+                              if (!userPhoneNumber) {
+                                Alert.alert(
+                                  "Error",
+                                  "User phone number not found."
+                                );
+                                return;
+                              }
+
+                              setTimeout(() => {
+                                Linking.openURL(`tel:${userPhoneNumber}`);
+                              }, 500); // ✅ Small delay
+                            }}
+                          >
+                            <FontAwesome name="phone" size={15} color="white" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "gray",
+                    marginTop: 5,
+                    marginLeft: 5,
+                  }}
+                >
+                  No appointments found.
                 </Text>
-                {appointments.map((appt, index) => (
-                  <View key={index} style={styles.appointmentCard}>
-                    <View>
-                      <Text style={styles.appointmentText}>
-                        {userMap[appt.user_id] || "Unknown User"}{" "}
-                      </Text>
-
-                      <Text style={styles.appointmentText}>
-                        {convertTo12HourFormat(appt.start_time)} -{" "}
-                        {convertTo12HourFormat(appt.end_time)}
-                      </Text>
-                    </View>
-                    <View style={styles.buttonContainer}>
-                      {/* Complete Button */}
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.completeButton]}
-                        onPress={() => handleCompletePress(appt)}
-                      >
-                        <FontAwesome name="eye" size={15} color="white" />
-                      </TouchableOpacity>
-                      {/* Cancel Button */}
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.cancelButton]}
-                        onPress={() => handleCancelAppointment(appt.id)}
-                      >
-                        <FontAwesome name="times" size={15} color="white" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.recallButton]}
-                        onPress={() => {
-                          if (!selectedAppointmentRef.current) {
-                            Alert.alert("Error", "No appointment available.");
-                            return;
-                          }
-
-                          const userId = selectedAppointmentRef.current.user_id;
-
-                          if (!userId) {
-                            Alert.alert(
-                              "Error",
-                              "No user ID found in appointment."
-                            );
-                            return;
-                          }
-
-                          const userPhoneNumber = userMapNumber[userId];
-
-                          if (!userPhoneNumber) {
-                            Alert.alert(
-                              "Error",
-                              "User phone number not found."
-                            );
-                            return;
-                          }
-
-                          setTimeout(() => {
-                            Linking.openURL(`tel:${userPhoneNumber}`);
-                          }, 500); // ✅ Small delay
-                        }}
-                      >
-                        <FontAwesome name="phone" size={15} color="white" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "gray",
-                  marginTop: 5,
-                  marginLeft: 5,
-                }}
-              >
-                No appointments found.
-              </Text>
-            )}
-          </ScrollView>
-        </View>
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={agentCalendarModalVisible}
-          onRequestClose={() => setAgentCalendarModalVisible(false)}
-        >
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              backgroundColor: "rgba(0,0,0,0.5)",
-            }}
+              )}
+            </ScrollView>
+          </View>
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={agentCalendarModalVisible}
+            onRequestClose={() => setAgentCalendarModalVisible(false)}
           >
             <View
               style={{
-                backgroundColor: "white",
-                padding: 20,
-                borderRadius: 10,
-                width: "80%",
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "rgba(0,0,0,0.5)",
               }}
             >
-              <Text style={{ fontSize: 13, marginBottom: 10 }}>
-                {selectedAgent?.full_name}'s Unavailability
-              </Text>
-
-              {/* Start Date Picker */}
-              <TouchableOpacity onPress={() => setShowStartDatePicker(true)}>
-                <Text
-                  style={{
-                    padding: 10,
-                    borderWidth: 1,
-                    borderRadius: 5,
-                    fontSize: 12,
-                  }}
-                >
-                  📅 Start Date: {startDate.toDateString()}
-                </Text>
-              </TouchableOpacity>
-              {showStartDatePicker && (
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowStartDatePicker(false);
-                    if (date) setStartDate(date);
-                  }}
-                />
-              )}
-
-              {/* End Date Picker */}
-              <TouchableOpacity onPress={() => setShowEndDatePicker(true)}>
-                <Text
-                  style={{
-                    padding: 10,
-                    borderWidth: 1,
-                    borderRadius: 5,
-                    marginTop: 10,
-                    fontSize: 12,
-                  }}
-                >
-                  📅 End Date: {endDate.toDateString()}
-                </Text>
-              </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={endDate}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowEndDatePicker(false);
-                    if (date) setEndDate(date);
-                  }}
-                />
-              )}
-
-              {/* Start Time Picker */}
-              <TouchableOpacity onPress={() => setShowStartTimePicker(true)}>
-                <Text
-                  style={{
-                    padding: 10,
-                    borderWidth: 1,
-                    borderRadius: 5,
-                    marginTop: 10,
-                    fontSize: 12,
-                  }}
-                >
-                  ⏰ Start Time: {startTime.toLocaleTimeString()}
-                </Text>
-              </TouchableOpacity>
-              {showStartTimePicker && (
-                <DateTimePicker
-                  value={startTime}
-                  mode="time"
-                  display="default"
-                  onChange={(event, time) => {
-                    setShowStartTimePicker(false);
-                    if (time) setStartTime(time);
-                  }}
-                />
-              )}
-
-              {/* End Time Picker */}
-              <TouchableOpacity onPress={() => setShowEndTimePicker(true)}>
-                <Text
-                  style={{
-                    padding: 10,
-                    borderWidth: 1,
-                    borderRadius: 5,
-                    marginTop: 10,
-                    fontSize: 12,
-                  }}
-                >
-                  ⏰ End Time: {endTime.toLocaleTimeString()}
-                </Text>
-              </TouchableOpacity>
-              {showEndTimePicker && (
-                <DateTimePicker
-                  value={endTime}
-                  mode="time"
-                  display="default"
-                  onChange={(event, time) => {
-                    setShowEndTimePicker(false);
-                    if (time) setEndTime(time);
-                  }}
-                />
-              )}
-
-              {/* Submit Button */}
-              <TouchableOpacity
+              <View
                 style={{
-                  backgroundColor: "#007BFF",
-                  padding: 10,
-                  borderRadius: 5,
-                  alignItems: "center",
-                  marginTop: 10,
+                  backgroundColor: "white",
+                  padding: 20,
+                  borderRadius: 10,
+                  width: "80%",
                 }}
-                onPress={handleSubmit}
               >
-                <Text style={{ color: "white", fontSize: 12 }}>Save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setAgentCalendarModalVisible(false)}
-              >
-                <FontAwesome name="times" color="red" size={15} />
-              </TouchableOpacity>
+                <Text style={{ fontSize: 13, marginBottom: 10 }}>
+                  {selectedAgent?.full_name}'s Unavailability
+                </Text>
+
+                {/* Start Date Picker */}
+                <TouchableOpacity onPress={() => setShowStartDatePicker(true)}>
+                  <Text
+                    style={{
+                      padding: 10,
+                      borderWidth: 1,
+                      borderRadius: 5,
+                      fontSize: 12,
+                    }}
+                  >
+                    📅 Start Date: {startDate.toDateString()}
+                  </Text>
+                </TouchableOpacity>
+                {showStartDatePicker && (
+                  <DateTimePicker
+                    value={startDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                      setShowStartDatePicker(false);
+                      if (date) setStartDate(date);
+                    }}
+                  />
+                )}
+
+                {/* End Date Picker */}
+                <TouchableOpacity onPress={() => setShowEndDatePicker(true)}>
+                  <Text
+                    style={{
+                      padding: 10,
+                      borderWidth: 1,
+                      borderRadius: 5,
+                      marginTop: 10,
+                      fontSize: 12,
+                    }}
+                  >
+                    📅 End Date: {endDate.toDateString()}
+                  </Text>
+                </TouchableOpacity>
+                {showEndDatePicker && (
+                  <DateTimePicker
+                    value={endDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                      setShowEndDatePicker(false);
+                      if (date) setEndDate(date);
+                    }}
+                  />
+                )}
+
+                {/* Start Time Picker */}
+                <TouchableOpacity onPress={() => setShowStartTimePicker(true)}>
+                  <Text
+                    style={{
+                      padding: 10,
+                      borderWidth: 1,
+                      borderRadius: 5,
+                      marginTop: 10,
+                      fontSize: 12,
+                    }}
+                  >
+                    ⏰ Start Time: {startTime.toLocaleTimeString()}
+                  </Text>
+                </TouchableOpacity>
+                {showStartTimePicker && (
+                  <DateTimePicker
+                    value={startTime}
+                    mode="time"
+                    display="default"
+                    onChange={(event, time) => {
+                      setShowStartTimePicker(false);
+                      if (time) setStartTime(time);
+                    }}
+                  />
+                )}
+
+                {/* End Time Picker */}
+                <TouchableOpacity onPress={() => setShowEndTimePicker(true)}>
+                  <Text
+                    style={{
+                      padding: 10,
+                      borderWidth: 1,
+                      borderRadius: 5,
+                      marginTop: 10,
+                      fontSize: 12,
+                    }}
+                  >
+                    ⏰ End Time: {endTime.toLocaleTimeString()}
+                  </Text>
+                </TouchableOpacity>
+                {showEndTimePicker && (
+                  <DateTimePicker
+                    value={endTime}
+                    mode="time"
+                    display="default"
+                    onChange={(event, time) => {
+                      setShowEndTimePicker(false);
+                      if (time) setEndTime(time);
+                    }}
+                  />
+                )}
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "#007BFF",
+                    padding: 10,
+                    borderRadius: 5,
+                    alignItems: "center",
+                    marginTop: 10,
+                  }}
+                  onPress={handleSubmit}
+                >
+                  <Text style={{ color: "white", fontSize: 12 }}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setAgentCalendarModalVisible(false)}
+                >
+                  <FontAwesome name="times" color="red" size={15} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </Modal>
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={modalVisible}
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Appointment Details</Text>
+          </Modal>
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Appointment Details</Text>
 
-              {selectedAppointment && (
-                <>
-                  <View style={styles.rowContainer}>
-                    <Text style={styles.bold}>User</Text>
-                    <Text style={styles.bold}>
-                      {userMap[selectedAppointment.user_id] || "Unknown User"}{" "}
-                    </Text>
-                  </View>
-                  <View style={styles.rowContainer}>
-                    <Text style={styles.bold}>Mobile</Text>
-                    <Text style={styles.bold}>
-                      {userMapNumber[selectedAppointment.user_id] ||
-                        "Unknown User"}
-                    </Text>
-                  </View>
-                  <View style={styles.rowContainer}>
-                    <Text style={styles.bold}>Previous Completed Visits</Text>
-                    <Text style={styles.bold}>{completedAssignmentsCount}</Text>
-                  </View>
-
-                  <View style={styles.rowContainer}>
-                    <Text style={styles.bold}>Time</Text>
-                    <Text style={styles.bold}>
-                      {convertTo12HourFormat(selectedAppointment.start_time)} -{" "}
-                      {convertTo12HourFormat(selectedAppointment.end_time)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.rowContainer}>
-                    <Text style={styles.bold}>Date</Text>
-                    <Text style={styles.bold}>
-                      {formatDate(selectedAppointment.appointment_date)}
-                    </Text>
-                  </View>
-                  {showQrCode && (
-                    <View style={styles.qrOverlay}>
-                      <Image
-                        source={require("../assets/QR-code.png")}
-                        style={styles.qrImage}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  )}
-
-                  <View style={styles.rowContainer}>
-                    <Text style={styles.bold}>Agent</Text>
-                    <Text style={styles.bold}>
-                      {selectedAgent?.full_name || "N/A"}
-                    </Text>
-                  </View>
-                  <View>
-                    <Text
-                      style={[styles.text, { marginBottom: 2, paddingLeft: 2 , marginTop:5 , borderTopColor:"gray", borderTopWidth:1 ,paddingTop:5}]}
-                    >
-                      <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
-                      <Text
-                        style={styles.addDetails}
-                        onPress={async () => {
-                          await fetchProductList();
-                          setProductModalVisible(true);
-                        }}
-                      >
-                        ADD SERVICE
+                {selectedAppointment && (
+                  <>
+                    <View style={styles.rowContainer}>
+                      <Text style={styles.bold}>User</Text>
+                      <Text style={styles.bold}>
+                        {userMap[selectedAppointment.user_id] || "Unknown User"}{" "}
                       </Text>
-                    </Text>
-                  </View>
-                  {orders.length > 0 ? (
-                    <View>
-                      {orders.map((order) => (
-                        <View key={order.id} style={styles.orderCard}>
-                          {/* Order Details */}
-                          <Text style={styles.orderText}>
-                            <Text style={styles.bold}>Order No:</Text>{" "}
-                            {order.order_no}
+                    </View>
+                    <View style={styles.rowContainer}>
+                      <Text style={styles.bold}>Mobile</Text>
+                      <Text style={styles.bold}>
+                        {userMapNumber[selectedAppointment.user_id] ||
+                          "Unknown User"}
+                      </Text>
+                    </View>
+                    <View style={styles.rowContainer}>
+                      <Text style={styles.bold}>Previous Completed Visits</Text>
+                      <Text style={styles.bold}>
+                        {completedAssignmentsCount}
+                      </Text>
+                    </View>
+
+                    <View style={styles.rowContainer}>
+                      <Text style={styles.bold}>Time</Text>
+                      <Text style={styles.bold}>
+                        {convertTo12HourFormat(selectedAppointment.start_time)}{" "}
+                        - {convertTo12HourFormat(selectedAppointment.end_time)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.rowContainer}>
+                      <Text style={styles.bold}>Date</Text>
+                      <Text style={styles.bold}>
+                        {formatDate(selectedAppointment.appointment_date)}
+                      </Text>
+                    </View>
+                    {showQrCode && (
+                      <View style={styles.qrOverlay}>
+                        {qrCodes.length === 0 ? (
+                          <Text style={styles.emptyText}>
+                            No QR code found.
                           </Text>
+                        ) : (
+                          qrCodes.map((qrCode) => (
+                            <View key={qrCode.id} style={styles.qrContainer}>
+                              <Image
+                                source={{ uri: qrCode.url }}
+                                style={styles.qrImage}
+                                resizeMode="contain"
+                                onError={() =>
+                                  setError("Failed to load QR code image")
+                                }
+                              />
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    )}
 
-                          {orderDetails.length > 0 ||
-                          selectedProducts.length > 0 ? (
-                            <ScrollView style={styles.selectedProductsScroll}>
-                              {/* ✅ Render Order Details First */}
-                              {orderDetails.map((detail) => (
-                                <View
-                                  key={`order_${detail.id}`}
-                                  style={styles.orderDetailCard}
-                                >
-                                  <View style={styles.orderDetailRow}>
-                                    <View style={styles.orderDetailColumn}>
-                                      <Text style={styles.orderDetailText}>
-                                        <Text style={styles.bold}></Text>{" "}
-                                        {detail.menu_name}
-                                      </Text>
-                                      <Text style={styles.orderDetailText}>
-                                        <Text style={styles.bold}>₹</Text>{" "}
-                                        {detail.menu_rate_total.toFixed(2)}
-                                      </Text>
-                                    </View>
-                                    <View style={styles.quantityContainer}>
-                                      <TouchableOpacity
-                                        style={styles.qtyButton}
-                                        onPress={() =>
-                                          updateProductQuantity(
-                                            detail.id,
-                                            detail.qty_sold - 1
-                                          )
-                                        }
-                                      >
-                                        <FontAwesome
-                                          name="minus"
-                                          size={15}
-                                          color="red"
-                                        />
-                                      </TouchableOpacity>
+                    <View style={styles.rowContainer}>
+                      <Text style={styles.bold}>Agent</Text>
+                      <Text style={styles.bold}>
+                        {selectedAgent?.full_name || "N/A"}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text
+                        style={[
+                          styles.text,
+                          {
+                            marginBottom: 2,
+                            paddingLeft: 2,
+                            marginTop: 5,
+                            borderTopColor: "gray",
+                            borderTopWidth: 1,
+                            paddingTop: 5,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={styles.addDetails}
+                          onPress={async () => {
+                            await fetchProductList();
+                            setProductModalVisible(true);
+                          }}
+                        >
+                          ADD SERVICE
+                        </Text>
+                      </Text>
+                    </View>
+                    {orders.length > 0 ? (
+                      <View>
+                        {orders.map((order) => (
+                          <View key={order.id} style={styles.orderCard}>
+                            {/* Order Details */}
+                            <Text style={styles.orderText}>
+                              <Text style={styles.bold}>Order No:</Text>{" "}
+                              {order.order_no}
+                            </Text>
 
-                                      <TextInput
-                                        style={styles.qtyInput}
-                                        keyboardType="numeric"
-                                        value={String(detail.qty_sold)}
-                                        onChangeText={(value) =>
-                                          updateProductQuantity(
-                                            detail.id,
-                                            parseInt(value) || 1
-                                          )
-                                        }
-                                      />
-
-                                      <TouchableOpacity
-                                        style={styles.qtyButton}
-                                        onPress={() =>
-                                          updateProductQuantity(
-                                            detail.id,
-                                            detail.qty_sold + 1
-                                          )
-                                        }
-                                      >
-                                        <FontAwesome
-                                          name="plus"
-                                          size={15}
-                                          color="green"
-                                        />
-                                      </TouchableOpacity>
-                                    </View>
-                                  </View>
-                                </View>
-                              ))}
-
-                              {/* ✅ Render Selected Products That Are Not in Order Details */}
-                              {selectedProducts
-                                .filter(
-                                  (product) =>
-                                    !orderDetails.some(
-                                      (detail) =>
-                                        detail.menu_name === product.Name
-                                    )
-                                )
-                                .map((product) => (
-                                  <ScrollView
-                                    key={`selected_${product.id}`}
+                            {orderDetails.length > 0 ||
+                            selectedProducts.length > 0 ? (
+                              <ScrollView style={styles.selectedProductsScroll}>
+                                {/* ✅ Render Order Details First */}
+                                {orderDetails.map((detail) => (
+                                  <View
+                                    key={`order_${detail.id}`}
                                     style={styles.orderDetailCard}
                                   >
                                     <View style={styles.orderDetailRow}>
                                       <View style={styles.orderDetailColumn}>
                                         <Text style={styles.orderDetailText}>
-                                          <Text style={styles.bold}>Item:</Text>{" "}
-                                          {product.Name}
+                                          <Text style={styles.bold}></Text>{" "}
+                                          {detail.menu_name}
                                         </Text>
                                         <Text style={styles.orderDetailText}>
                                           <Text style={styles.bold}>₹</Text>{" "}
-                                          {(
-                                            product.quantity * product.Price
-                                          ).toFixed(2)}
+                                          {detail.menu_rate_total.toFixed(2)}
                                         </Text>
                                       </View>
                                       <View style={styles.quantityContainer}>
@@ -1533,9 +1542,8 @@ export default function Billing() {
                                           style={styles.qtyButton}
                                           onPress={() =>
                                             updateProductQuantity(
-                                              product.id,
-                                              product.quantity - 1,
-                                              true
+                                              detail.id,
+                                              detail.qty_sold - 1
                                             )
                                           }
                                         >
@@ -1549,12 +1557,11 @@ export default function Billing() {
                                         <TextInput
                                           style={styles.qtyInput}
                                           keyboardType="numeric"
-                                          value={String(product.quantity)}
+                                          value={String(detail.qty_sold)}
                                           onChangeText={(value) =>
                                             updateProductQuantity(
-                                              product.id,
-                                              parseInt(value) || 1,
-                                              true
+                                              detail.id,
+                                              parseInt(value) || 1
                                             )
                                           }
                                         />
@@ -1563,9 +1570,8 @@ export default function Billing() {
                                           style={styles.qtyButton}
                                           onPress={() =>
                                             updateProductQuantity(
-                                              product.id,
-                                              product.quantity + 1,
-                                              true
+                                              detail.id,
+                                              detail.qty_sold + 1
                                             )
                                           }
                                         >
@@ -1577,306 +1583,404 @@ export default function Billing() {
                                         </TouchableOpacity>
                                       </View>
                                     </View>
-                                  </ScrollView>
+                                  </View>
                                 ))}
-                            </ScrollView>
-                          ) : (
-                            <Text
-                              style={{
-                                fontSize: 14,
-                                color: "gray",
-                                marginTop: 10,
-                              }}
-                            >
-                              No orders found.
-                            </Text>
-                          )}
 
-                          <View style={styles.rowContainer}>
-                            <Text style={styles.boldSecond}>
-                              <Text style={styles.boldSecond}>
-                                Total Items:
-                              </Text>{" "}
-                              {order.total_items +
-                                selectedProducts
+                                {/* ✅ Render Selected Products That Are Not in Order Details */}
+                                {selectedProducts
                                   .filter(
-                                    (p) =>
+                                    (product) =>
                                       !orderDetails.some(
-                                        (d) => d.menu_name === p.Name
+                                        (detail) =>
+                                          detail.menu_name === product.Name
                                       )
                                   )
-                                  .reduce((sum, p) => sum + p.quantity, 0)}
-                            </Text>
-                            {/* <Text style={styles.boldSecond}>
-                              <Text style={styles.boldSecond}>Total:</Text> ₹{" "}
-                              {(
-                                order.grand_total +
-                                selectedProducts
-                                  .filter(
-                                    (p) =>
-                                      !orderDetails.some(
-                                        (d) => d.menu_name === p.Name
-                                      )
-                                  )
-                                  .reduce(
-                                    (sum, p) => sum + p.quantity * p.Price,
-                                    0
-                                  )
-                              ).toFixed(2)}
-                            </Text> */}
+                                  .map((product) => (
+                                    <ScrollView
+                                      key={`selected_${product.id}`}
+                                      style={styles.orderDetailCard}
+                                    >
+                                      <View style={styles.orderDetailRow}>
+                                        <View style={styles.orderDetailColumn}>
+                                          <Text style={styles.orderDetailText}>
+                                            <Text style={styles.bold}>
+                                              Item:
+                                            </Text>{" "}
+                                            {product.Name}
+                                          </Text>
+                                          <Text style={styles.orderDetailText}>
+                                            <Text style={styles.bold}>₹</Text>{" "}
+                                            {(
+                                              product.quantity * product.Price
+                                            ).toFixed(2)}
+                                          </Text>
+                                        </View>
+                                        <View style={styles.quantityContainer}>
+                                          <TouchableOpacity
+                                            style={styles.qtyButton}
+                                            onPress={() =>
+                                              updateProductQuantity(
+                                                product.id,
+                                                product.quantity - 1,
+                                                true
+                                              )
+                                            }
+                                          >
+                                            <FontAwesome
+                                              name="minus"
+                                              size={15}
+                                              color="red"
+                                            />
+                                          </TouchableOpacity>
 
-<Text style={styles.boldSecond}>
-  <Text style={styles.boldSecond}>Total:</Text> ₹ 
-  {(
-    (order.grand_total +
-    selectedProducts
-      .filter(p => !orderDetails.some(d => d.menu_name === p.Name))
-      .reduce((sum, p) => sum + p.quantity * p.Price, 0)
-    ) +
-    (discountType === 'add' 
-      ? parseFloat(discountAmount || 0) 
-      : -parseFloat(discountAmount || 0)
-    )
-  ).toFixed(2)}
-</Text>
-                          </View>
-                          <View style={styles.paymentMethodContainer}>
-                            {["cash", "card", "online"].map((method) => (
-                              <TouchableOpacity
-                                key={method}
-                                style={[
-                                  styles.paymentButton,
-                                  paymentMethod === method &&
-                                    styles.selectedPayment,
-                                ]}
-                                onPress={() => {
-                                  setPaymentMethod(method);
-                                  setSelectedOrder(order); // ✅ Order state updates first
+                                          <TextInput
+                                            style={styles.qtyInput}
+                                            keyboardType="numeric"
+                                            value={String(product.quantity)}
+                                            onChangeText={(value) =>
+                                              updateProductQuantity(
+                                                product.id,
+                                                parseInt(value) || 1,
+                                                true
+                                              )
+                                            }
+                                          />
+
+                                          <TouchableOpacity
+                                            style={styles.qtyButton}
+                                            onPress={() =>
+                                              updateProductQuantity(
+                                                product.id,
+                                                product.quantity + 1,
+                                                true
+                                              )
+                                            }
+                                          >
+                                            <FontAwesome
+                                              name="plus"
+                                              size={15}
+                                              color="green"
+                                            />
+                                          </TouchableOpacity>
+                                        </View>
+                                      </View>
+                                    </ScrollView>
+                                  ))}
+                              </ScrollView>
+                            ) : (
+                              <Text
+                                style={{
+                                  fontSize: 14,
+                                  color: "gray",
+                                  marginTop: 10,
                                 }}
                               >
-                                <Text
-                                  style={[
-                                    { fontSize: 12 }, // ✅ Set font size to 10
-                                    paymentMethod === method
-                                      ? { color: "white" }
-                                      : {},
-                                  ]}
-                                >
-                                  {method.charAt(0).toUpperCase() +
-                                    method.slice(1)}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                          <View
-                            style={{
-                              marginBottom: 1,
-                              marginTop: 5,
-                              flexDirection: "row",
-                              width: "100%",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-
-                            }}
-                          >
-                            <TextInput
-                              style={styles.paymentInputDis}
-                              placeholder={  discountType === "add" ? "Add Amount" : "Discount Amount"}
-                              keyboardType="numeric"
-                              value={discountAmount}
-                              onChangeText={setDiscountAmount}
-                            />
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                gap:10,
-                                
-                              }}
-                            >
-                              <TouchableOpacity
-                                style={[
-                                  styles.paymentButtonDis,
-                                  discountType === "subtract" &&
-                                    styles.selectedPaymentDis,
-                                ]}
-                                onPress={() => setDiscountType("subtract")}
-                              >
-                                <Text
-                                  style={{
-                                    color:
-                                      discountType === "subtract"
-                                        ? "#fff"
-                                        : "#000",
-                                    fontSize: 18,
-                                    fontWeight: "bold",
-                                    items: "center",
-                                    alignItems: "center",
-                                    marginTop: -5, 
-                                  }}
-                                >
-                                  -
-                                </Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[
-                                  styles.paymentButtonDis,
-                                  discountType === "add" &&
-                                    styles.selectedPaymentDis,
-                                ]}
-                                onPress={() => setDiscountType("add")}
-                              >
-                                <Text
-                                  style={{
-                                    color:
-                                      discountType === "add" ? "#fff" : "#000",
-                                    fontSize: 18,
-                                    fontWeight: "bold",
-                                    items: "center",
-                                    alignItems: "center",
-                                    marginTop: -5, 
-                                  }}
-                                >
-                                  +
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-
-                          {/* Payment Input & Confirmation */}
-                          {paymentMethod &&
-                            selectedOrder?.order_no === order.order_no && (
-                              <View>
-                                <TextInput
-                                  style={styles.paymentInput}
-                                  keyboardType="numeric"
-                                  value={paymentAmount}
-                                  editable={false}
-                                  placeholder="Amount"
-                                />
-
-                                <View
-                                  style={{
-                                    flexDirection: "row",
-                                    width: "50%",
-                                    gap: 5,
-                                  }}
-                                >
-                                  <TouchableOpacity
-                                    style={styles.confirmButton}
-                                    onPress={() =>
-                                      handlePaymentConfirmation(order)
-                                    }
-                                  >
-                                    <Text style={styles.confirmButtonText}>
-                                      Payment
-                                    </Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
-                                    style={styles.confirmButton}
-                                    onPress={toggleQrCode}
-                                  >
-                                    <Text style={styles.confirmButtonText}>
-                                      {" "}
-                                      {showQrCode ? "Close QR" : "Open QR"}
-                                    </Text>
-                                  </TouchableOpacity>
-                                </View>
-                              </View>
+                                No orders found.
+                              </Text>
                             )}
-                        </View>
-                      ))}
-                    </View>
-                  ) : (
-                    <Text
-                      style={{ fontSize: 13, color: "gray", marginTop: 10 }}
-                    >
-                      No orders found.
-                    </Text>
-                  )}
-                </>
-              )}
 
-              {/* Close Button */}
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <FontAwesome name="times" color="red" size={15} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={productModalVisible}
-          onRequestClose={() => setProductModalVisible(false)}
-        >
-          <View style={styles.modalOverlayProduct}>
-            <View style={styles.modalContentProduct}>
-              <TouchableOpacity
-                style={styles.closeIconContainer}
-                onPress={() => setProductModalVisible(false)}
-              >
-                <FontAwesome name="close" size={20} color="red" />
-              </TouchableOpacity>
-              <Text style={styles.modalTitleProduct}>Select a Product</Text>
+                            <View style={styles.rowContainer}>
+                              <Text style={styles.boldSecond}>
+                                <Text style={styles.boldSecond}>
+                                  Total Items:
+                                </Text>{" "}
+                                {order.total_items +
+                                  selectedProducts
+                                    .filter(
+                                      (p) =>
+                                        !orderDetails.some(
+                                          (d) => d.menu_name === p.Name
+                                        )
+                                    )
+                                    .reduce((sum, p) => sum + p.quantity, 0)}
+                              </Text>
+                              {/* <Text style={styles.boldSecond}>
+                                      <Text style={styles.boldSecond}>Total:</Text> ₹{" "}
+                                      {(
+                                        order.grand_total +
+                                        selectedProducts
+                                          .filter(
+                                            (p) =>
+                                              !orderDetails.some(
+                                                (d) => d.menu_name === p.Name
+                                              )
+                                          )
+                                          .reduce(
+                                            (sum, p) => sum + p.quantity * p.Price,
+                                            0
+                                          )
+                                      ).toFixed(2)}
+                                    </Text> */}
 
-              <FlatList
-                data={products}
-                keyExtractor={(item) =>
-                  item["Unique Id"] || Math.random().toString()
-                }
-                numColumns={3} // ✅ Ensures 3 columns
-                columnWrapperStyle={styles.rowContainer} // ✅ Ensures proper spacing
-                renderItem={({ item }) => {
-                  const selectedProduct = selectedProducts.find(
-                    (p) => p.id === item.id
-                  );
+                              <Text style={styles.boldSecond}>
+                                <Text style={styles.boldSecond}>Total:</Text> ₹
+                                {
+                                  order.grand_total +
+                                    selectedProducts
+                                      .filter(
+                                        (p) =>
+                                          !orderDetails.some(
+                                            (d) => d.menu_name === p.Name
+                                          )
+                                      )
+                                      .reduce(
+                                        (sum, p) => sum + p.quantity * p.Price,
+                                        0
+                                      )
+                                  // (discountType === "add"
+                                  //   ? parseFloat(discountAmount || 0)
+                                  //   : -parseFloat(discountAmount || 0))
+                                }
+                              </Text>
+                            </View>
+                            <View style={styles.paymentMethodContainer}>
+                              {["online", "cash", "card"].map((method) => (
+                                <TouchableOpacity
+                                  key={method}
+                                  style={[
+                                    styles.paymentButton,
+                                    paymentMethod === method &&
+                                      styles.selectedPayment,
+                                  ]}
+                                  onPress={() => {
+                                    setPaymentMethod(method);
+                                    setSelectedOrder(order); // ✅ Order state updates first
+                                  }}
+                                >
+                                  <Text
+                                    style={[
+                                      { fontSize: 12 }, // ✅ Set font size to 10
+                                      paymentMethod === method
+                                        ? { color: "white" }
+                                        : {},
+                                    ]}
+                                  >
+                                    {method.charAt(0).toUpperCase() +
+                                      method.slice(1)}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
 
-                  return (
-                    <View style={styles.productContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.productBox,
-                          selectedProduct ? styles.selectedProductBox : {},
-                        ]}
-                        onPress={() => handleProductPress(item)}
-                      >
-                        <View style={styles.productHeader}>
-                          <Text style={styles.uniqueId}>
-                            {item["Unique Id"]}
-                          </Text>
-                          <Text style={styles.price}>₹{item.Price}</Text>
-                        </View>
-                        <View style={styles.productBody}>
-                          <Text style={styles.productName}>{item.Name}</Text>
-                        </View>
-                        {selectedProduct && (
-                          <View style={styles.counter}>
-                            <Text style={styles.counterText}>
-                              {selectedProduct.quantity}
-                            </Text>
+                            {/* Payment Input & Confirmation */}
+                            {paymentMethod &&
+                              selectedOrder?.order_no === order.order_no && (
+                                <>
+                                  <View
+                                    style={{
+                                      marginBottom: 1,
+                                      marginTop: 5,
+                                      flexDirection: "row",
+                                      width: "100%",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    <TextInput
+                                      style={styles.paymentInputDis}
+                                      placeholder={
+                                        discountType === "add"
+                                          ? "Add Amount"
+                                          : "Discount Amount"
+                                      }
+                                      keyboardType="numeric"
+                                      value={discountAmount}
+                                      onChangeText={setDiscountAmount}
+                                    />
+                                    <View
+                                      style={{
+                                        flexDirection: "row",
+                                        justifyContent: "space-between",
+                                        gap: 10,
+                                      }}
+                                    >
+                                      <TouchableOpacity
+                                        style={[
+                                          styles.paymentButtonDis,
+                                          discountType === "subtract" &&
+                                            styles.selectedPaymentDis,
+                                        ]}
+                                        onPress={() =>
+                                          setDiscountType("subtract")
+                                        }
+                                      >
+                                        <Text
+                                          style={{
+                                            color:
+                                              discountType === "subtract"
+                                                ? "#fff"
+                                                : "#000",
+                                            fontSize: 18,
+
+                                            fontWeight: "bold",
+                                            items: "center",
+                                            alignItems: "center",
+                                            marginTop: 2,
+                                          }}
+                                        >
+                                          <FontAwesome name="minus" size={10} />
+                                        </Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={[
+                                          styles.paymentButtonDis,
+                                          discountType === "add" &&
+                                            styles.selectedPaymentDis,
+                                        ]}
+                                        onPress={() => setDiscountType("add")}
+                                      >
+                                        <Text
+                                          style={{
+                                            color:
+                                              discountType === "add"
+                                                ? "#fff"
+                                                : "#000",
+                                            fontSize: 18,
+                                            fontWeight: "bold",
+                                            items: "center",
+                                            alignItems: "center",
+                                            marginTop: 2,
+                                          }}
+                                        >
+                                          <FontAwesome name="plus" size={10} />
+                                        </Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+
+                                  <View>
+                                    <TextInput
+                                      style={styles.paymentInput}
+                                      keyboardType="numeric"
+                                      value={paymentAmount}
+                                      editable={false}
+                                      placeholder="Amount"
+                                    />
+
+                                    <View
+                                      style={{
+                                        flexDirection: "row",
+                                        width: "50%",
+                                        gap: 5,
+                                      }}
+                                    >
+                                      <TouchableOpacity
+                                        style={styles.confirmButton}
+                                        onPress={() =>
+                                          handlePaymentConfirmation(order)
+                                        }
+                                      >
+                                        <Text style={styles.confirmButtonText}>
+                                          Payment
+                                        </Text>
+                                      </TouchableOpacity>
+                                      <TouchableOpacity
+                                        style={styles.confirmButton}
+                                        onPress={toggleQrCode}
+                                      >
+                                        <Text style={styles.confirmButtonText}>
+                                          {" "}
+                                          {showQrCode ? "Close QR" : "Open QR"}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  </View>
+                                </>
+                              )}
                           </View>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  );
-                }}
-                contentContainerStyle={{ paddingHorizontal: 10 }} // ✅ Add padding
-              />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text
+                        style={{ fontSize: 13, color: "gray", marginTop: 10 }}
+                      >
+                        No orders found.
+                      </Text>
+                    )}
+                  </>
+                )}
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={closeButtonModal}
+                >
+                  <FontAwesome name="times" color="red" size={15} />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </Modal>
-      </View>
+          </Modal>
+
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={productModalVisible}
+            onRequestClose={() => setProductModalVisible(false)}
+          >
+            <View style={styles.modalOverlayProduct}>
+              <View style={styles.modalContentProduct}>
+                <TouchableOpacity
+                  style={styles.closeIconContainer}
+                  onPress={() => setProductModalVisible(false)}
+                >
+                  <FontAwesome name="close" size={20} color="red" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitleProduct}>Select a Product</Text>
+
+                <FlatList
+                  data={products}
+                  keyExtractor={(item) =>
+                    item["Unique Id"] || Math.random().toString()
+                  }
+                  numColumns={3} // ✅ Ensures 3 columns
+                  columnWrapperStyle={styles.rowContainer} // ✅ Ensures proper spacing
+                  renderItem={({ item }) => {
+                    const selectedProduct = selectedProducts.find(
+                      (p) => p.id === item.id
+                    );
+
+                    return (
+                      <View style={styles.productContainer}>
+                        <TouchableOpacity
+                          style={[
+                            styles.productBox,
+                            selectedProduct ? styles.selectedProductBox : {},
+                          ]}
+                          onPress={() => handleProductPress(item)}
+                        >
+                          <View style={styles.productHeader}>
+                            <Text style={styles.uniqueId}>
+                              {item["Unique Id"]}
+                            </Text>
+                            <Text style={styles.price}>₹{item.Price}</Text>
+                          </View>
+                          <View style={styles.productBody}>
+                            <Text style={styles.productName}>{item.Name}</Text>
+                          </View>
+                          {selectedProduct && (
+                            <View style={styles.counter}>
+                              <Text style={styles.counterText}>
+                                {selectedProduct.quantity}
+                              </Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  }}
+                  contentContainerStyle={{ paddingHorizontal: 10 }} // ✅ Add padding
+                />
+              </View>
+            </View>
+          </Modal>
+        </View>
       </ScrollView>
       <Footer />
     </>
   );
 }
 const styles = StyleSheet.create({
-  selectedProductsScroll:{
+  selectedProductsScroll: {
     maxHeight: 110,
   },
   qrOverlay: {
@@ -2078,7 +2182,6 @@ const styles = StyleSheet.create({
     borderTopColor: "#ccc",
     borderTopWidth: 1,
     paddingTop: 10,
-    
   },
   paymentButton: {
     padding: 10,
@@ -2093,8 +2196,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
     height: 40,
-
-
   },
   selectedPayment: {
     backgroundColor: "#007bff",
@@ -2154,7 +2255,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 10,
     width: "90%",
-    maxHeight: "80%",
+    maxHeight: "90%",
   },
   modalTitle: {
     fontSize: 13,
@@ -2200,7 +2301,7 @@ const styles = StyleSheet.create({
     fontWeight: "semibold",
     fontSize: 12,
   },
-  boldDis:{
+  boldDis: {
     fontSize: 12,
     width: "20%",
   },
@@ -2233,7 +2334,7 @@ const styles = StyleSheet.create({
     backgroundColor: "red",
   },
   recallButton: {
-    backgroundColor: "orange",
+    backgroundColor: "green",
   },
 
   buttonText: {

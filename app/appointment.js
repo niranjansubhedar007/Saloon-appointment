@@ -404,11 +404,12 @@ export default function Appointment() {
   const handleConfirmBooking = async () => {
     setBookingError("");
 
-    // Clear saved recipient from AsyncStorage and state
-    await AsyncStorage.removeItem("savedRecipient");
-    await AsyncStorage.removeItem("recipientName");
-    setSavedRecipient(null); // Clear the state immediately
-    setRecipientName(""); // Reset recipient name
+    if (Response.status === 200) {
+      await AsyncStorage.removeItem("savedRecipient");
+      await AsyncStorage.removeItem("recipientName");
+      setSavedRecipient(null); // Clear the state immediately
+      setRecipientName(""); // Reset recipient name
+    }
 
     if (
       !selectedDateTime?.date ||
@@ -439,7 +440,7 @@ export default function Appointment() {
     }
 
     if (selectedProducts.length === 0) {
-      setBookingError("Please select at least one product.");
+      setBookingError("Please select at least one Service.");
       return;
     }
 
@@ -625,6 +626,8 @@ export default function Appointment() {
       .join(" ");
 
   const handleProductPress = (product) => {
+    setBookingError("");
+
     setSelectedProducts((prevSelected) => {
       const existingProduct = prevSelected.find((p) => p.id === product.id);
       console.log("existingProduct", existingProduct);
@@ -1015,34 +1018,34 @@ export default function Appointment() {
     <>
       <ScrollView>
         <View style={{ padding: 10 }}>
-          <View style={styles.container}>
-            <Image
-              source={require("../assets/phonebgimg.png")}
-              style={styles.image}
-            />
-
-            <View style={styles.textContainer}>
-              <Text style={styles.text}>
-                <Text style={styles.semiBold}>Booking for someone else?</Text>{" "}
-                <Text
-                  style={styles.addDetails}
-                  onPress={() => {
-                    setModalVisible(true);
-                    setRecipientName(null);
-                    setMobileNumber(null);
-                    setFilteredRecipients([]); // ✅ Clear dropdown on modal open
-                  }}
-                >
-                  ADD CUSTOMERS
-                </Text>
-              </Text>
-              {savedRecipient && (
-                <Text style={styles.savedDetails}>
-                  {savedRecipient.full_name || "Select Customer"} -{" "}
-                  {savedRecipient.mobile_number || ""}
-                </Text>
-              )}
-            </View>
+          <View style={styles.containers}>
+            <TouchableOpacity
+              onPress={() => {
+                setModalVisible(true);
+                setRecipientName(null);
+                setMobileNumber(null);
+                setFilteredRecipients([]); // ✅ Clear dropdown on modal open
+              }}
+            >
+              <View style={styles.containerService}>
+                <View style={styles.iconWrapper}>
+                  <FontAwesome name="user-plus" size={18} color="#007bff" />
+                </View>
+                <View>
+                  <Text style={styles.text}>
+                    <Text style={styles.addDetails}>ADD / SELECT CUSTOMER</Text>
+                  </Text>
+                  <View>
+                    {savedRecipient && (
+                      <Text style={styles.savedDetails}>
+                        {savedRecipient.full_name || "Select Customer"} -{" "}
+                        {savedRecipient.mobile_number || ""}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
 
             {/* Product List Modal */}
             <Modal
@@ -1184,20 +1187,24 @@ export default function Appointment() {
               </TouchableWithoutFeedback>
             </Modal>
           </View>
-          <View style={{ marginTop: 5 }}>
-            <Text style={[styles.text, { marginTop: 5, paddingLeft: 5 }]}>
-              <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
-              <Text
-                style={styles.addDetails}
-                onPress={async () => {
-                  await fetchProductList();
-                  setProductModalVisible(true);
-                }}
-              >
-                ADD SERVICE
-              </Text>
-            </Text>
-          </View>
+
+          <TouchableOpacity
+            onPress={async () => {
+              await fetchProductList();
+              setProductModalVisible(true);
+            }}
+          >
+            <View style={styles.containerService}>
+              <View style={styles.iconWrapper}>
+                <FontAwesome name="scissors" size={20} color="#007bff" />
+              </View>
+              <View>
+                <Text style={styles.text}>
+                  <Text style={styles.addDetails}>ADD SERVICE</Text>
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
 
           {selectedProducts.length > 0 && (
             <View style={styles.selectedProductsContainer}>
@@ -1936,6 +1943,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 12,
     marginLeft: 5,
+  },
+  containerService: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    backgroundColor: "#E1EBEE",
+    borderRadius: 12,
+    marginTop: 10,
+  },
+
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#007bff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    backgroundColor: "#fff",
   },
   savedDetails: {
     fontSize: 13,

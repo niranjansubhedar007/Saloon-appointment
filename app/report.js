@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Modal,
   TouchableWithoutFeedback,
+  TextInput,
+  Alert,
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -38,6 +40,9 @@ const Report = () => {
   const [completedAppointments, setCompletedAppointments] = useState([]);
   const [users, setUsers] = useState([]); // Add a state to store users
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [orderDetails, setOrderDetails] = useState({
     items: [],
     discount: {
@@ -48,6 +53,64 @@ const Report = () => {
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const [selectedType, setSelectedType] = useState("today"); // default selection
   const [selectedAgentId, setSelectedAgentId] = useState(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  // Function to update password
+  const updatePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Error", "New password and confirm password don't match");
+      return;
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert("Error", "Please fill all fields");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+
+    try {
+      // First, verify current password
+      const { data: settings, error } = await supabase
+        .from("Setting")
+        .select("*")
+        .eq("key", "password")
+        .single();
+
+      if (error) throw error;
+
+      if (settings.value !== currentPassword) {
+        Alert.alert("Error", "Current password is incorrect");
+        setIsUpdatingPassword(false);
+        return;
+      }
+
+      // Update password
+      const { error: updateError } = await supabase
+        .from("Setting")
+        .update({ value: newPassword })
+        .eq("key", "password");
+
+      if (updateError) throw updateError;
+
+      Alert.alert("Success", "Password updated successfully");
+      setShowPasswordModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      console.error("Error updating password:", error);
+      Alert.alert("Error", "Failed to update password");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  // ... (keep all your existing functions)
 
   const fetchUsers = async () => {
     try {
@@ -295,7 +358,125 @@ const Report = () => {
         // }
         contentContainerStyle={styles.container}
       >
-        <Text style={styles.title}>📊 Sales Report</Text>
+        <View style={styles.headerContainer}>
+          <Text style={styles.title}>📊 Sales Report</Text>
+          <TouchableOpacity
+            onPress={() => setShowPasswordModal(true)}
+            style={styles.settingsButton}
+          >
+            <Feather name="settings" size={20} color="#007bff" />
+          </TouchableOpacity>
+        </View>
+        <Modal
+          visible={showPasswordModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowPasswordModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.passwordModalContainer}>
+              <TouchableOpacity
+                style={styles.closeIconContainer}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setCurrentPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                }}
+              >
+                <FontAwesome name="close" size={20} color="red" />
+              </TouchableOpacity>
+
+              <Text style={styles.modalTitle}>Change Password</Text>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  Current Password{" "}
+                  <Text style={{ color: "red", marginLeft: 2 }}>*</Text>
+                </Text>
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    secureTextEntry={!showCurrentPassword}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                  >
+                    <Feather
+                      name={showCurrentPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  New Password{" "}
+                  <Text style={{ color: "red", marginLeft: 2 }}>*</Text>
+                </Text>
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    <Feather
+                      name={showNewPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>
+                  Confirm Password{" "}
+                  <Text style={{ color: "red", marginLeft: 2 }}>*</Text>
+                </Text>
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    secureTextEntry={!showConfirmPassword}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    <Feather
+                      name={showConfirmPassword ? "eye-off" : "eye"}
+                      size={20}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.updateButton}
+                onPress={updatePassword}
+                disabled={isUpdatingPassword}
+              >
+                <Text style={styles.updateButtonText}>
+                  {isUpdatingPassword ? "Updating..." : "Update Password"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         <View style={styles.filterContainer}>
           {[
             { label: "Today", type: "today" },
@@ -582,10 +763,8 @@ const Report = () => {
                       paddingTop: 10,
                     }}
                   >
-                    <Text>
-                       Total:
-                    </Text>
-                    <Text> ₹{" "}{calculateModalGrandTotal()}</Text>
+                    <Text>Total:</Text>
+                    <Text> ₹ {calculateModalGrandTotal()}</Text>
                   </View>
 
                   {/* Show Discount if it exists */}
@@ -628,7 +807,7 @@ const Report = () => {
                         paddingRight: 7,
                       }}
                     >
-                     Grand Total: ₹{" "}
+                      Grand Total: ₹{" "}
                       {orderDetails.items.reduce(
                         (total, item) => total + (item.menu_rate_total || 0),
                         0
@@ -679,6 +858,76 @@ const Report = () => {
 };
 
 const styles = StyleSheet.create({
+  passwordInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 5,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 10,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 10,
+  },
+  headerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 10,
+    position: "relative",
+  },
+  settingsButton: {
+    position: "absolute",
+    right: 0,
+    padding: 10,
+  },
+  passwordModalContainer: {
+    width: "90%",
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+    color: "#007bff",
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    marginBottom: 5,
+    fontSize: 14,
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 5,
+    padding: 10,
+    fontSize: 16,
+  },
+  updateButton: {
+    backgroundColor: "#007bff",
+    padding: 15,
+    borderRadius: 5,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  updateButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
   tableContainer: {
     width: "100%",
     backgroundColor: "white",

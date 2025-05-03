@@ -366,11 +366,14 @@ export default function OwnerAppointment() {
   const handleConfirmBooking = async () => {
     setBookingError("");
 
+    if (Response.status === 200) {
+      await AsyncStorage.removeItem("savedRecipient");
+      await AsyncStorage.removeItem("recipientName");
+      setSavedRecipient(null); // Clear the state immediately
+      setRecipientName(""); // Reset recipient name
+    }
     // Clear saved recipient from AsyncStorage and state
-    await AsyncStorage.removeItem("savedRecipient");
-    await AsyncStorage.removeItem("recipientName");
-    setSavedRecipient(null); // Clear the state immediately
-    setRecipientName(""); // Reset recipient name
+
     if (
       !selectedDateTime?.date ||
       !selectedDateTime?.startTime ||
@@ -400,7 +403,7 @@ export default function OwnerAppointment() {
     }
 
     if (selectedProducts.length === 0) {
-      setBookingError("Please select at least one product.");
+      setBookingError("Please select at least one Service.");
       return;
     }
 
@@ -590,6 +593,8 @@ export default function OwnerAppointment() {
       .join(" ");
 
   const handleProductPress = (product) => {
+    setBookingError("");
+
     setSelectedProducts((prevSelected) => {
       const existingProduct = prevSelected.find((p) => p.id === product.id);
       console.log("existingProduct", existingProduct);
@@ -1103,15 +1108,16 @@ export default function OwnerAppointment() {
   return (
     <>
       <View style={{ padding: 10 }}>
-        <View style={styles.container}>
-          <Image
-            source={require("../assets/phonebgimg.png")}
+        <View style={styles.containers}>
+          {/* <FontAwesome
+            name="user"
+            size={20}
+            color="blue"
             style={styles.image}
           />
 
           <View style={styles.textContainer}>
             <Text style={styles.text}>
-              <Text style={styles.semiBold}>Booking for someone else?</Text>{" "}
               <Text
                 style={styles.addDetails}
                 onPress={() => {
@@ -1121,7 +1127,7 @@ export default function OwnerAppointment() {
                   setFilteredRecipients([]); // ✅ Clear dropdown on modal open
                 }}
               >
-                ADD CUSTOMER
+                ADD / SELECT CUSTOMER
               </Text>
             </Text>
             {savedRecipient && (
@@ -1130,7 +1136,35 @@ export default function OwnerAppointment() {
                 {savedRecipient.mobile_number || ""}
               </Text>
             )}
-          </View>
+          </View> */}
+
+          <TouchableOpacity
+            onPress={() => {
+              setModalVisible(true);
+              setRecipientName(null);
+              setMobileNumber(null);
+              setFilteredRecipients([]); // ✅ Clear dropdown on modal open
+            }}
+          >
+            <View style={styles.containerService}>
+              <View style={styles.iconWrapper}>
+                <FontAwesome name="user-plus" size={18} color="#007bff" />
+              </View>
+              <View>
+                <Text style={styles.text}>
+                  <Text style={styles.addDetails}>ADD / SELECT CUSTOMER</Text>
+                </Text>
+                <View>
+                {savedRecipient && (
+                  <Text style={styles.savedDetails}>
+                    {savedRecipient.full_name || "Select Customer"} -{" "}
+                    {savedRecipient.mobile_number || ""}
+                  </Text>
+                )}
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
 
           {/* Product List Modal */}
           <Modal
@@ -1267,21 +1301,24 @@ export default function OwnerAppointment() {
             </TouchableWithoutFeedback>
           </Modal>
         </View>
-        <View style={{ marginTop: 5 }}>
-          <Text style={[styles.text, { marginTop: 5, paddingLeft: 5 }]}>
-            <Text style={styles.semiBold}>Booking for Order?</Text>{" "}
-            <Text
-              style={styles.addDetails}
-              onPress={async () => {
-                await fetchProductList();
-                setProductModalVisible(true);
-              }}
-            >
-              ADD SERVICE
-            </Text>
-          </Text>
-        </View>
 
+        <TouchableOpacity
+          onPress={async () => {
+            await fetchProductList();
+            setProductModalVisible(true);
+          }}
+        >
+          <View style={styles.containerService}>
+            <View style={styles.iconWrapper}>
+              <FontAwesome name="scissors" size={20} color="#007bff" />
+            </View>
+            <View>
+              <Text style={styles.text}>
+                <Text style={styles.addDetails}>ADD SERVICE</Text>
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
         {selectedProducts.length > 0 && (
           <View style={styles.selectedProductsContainer}>
             <ScrollView style={styles.selectedProductsScroll}>
@@ -1397,7 +1434,12 @@ export default function OwnerAppointment() {
                   style={[
                     styles.dayColumn,
                     item.isUnavailable
-                      ? { backgroundColor: "rgba(230, 95, 95, 0.1)", opacity: 0.5 , borderColor: "#ff0000" , borderWidth: 1}
+                      ? {
+                          backgroundColor: "rgba(230, 95, 95, 0.1)",
+                          opacity: 0.5,
+                          borderColor: "#ff0000",
+                          borderWidth: 1,
+                        }
                       : selectedDateTime?.date === formattedDate
                       ? {
                           borderColor: "#007bff",
@@ -2041,13 +2083,57 @@ const styles = StyleSheet.create({
     backgroundColor: "#E1EBEE",
     borderRadius: 10,
   },
+  // containerService: {
+  //   flexDirection: "row",
+  //   alignItems: "center",
+  //   padding: 12,
+  //   backgroundColor: "#E1EBEE",
+  //   borderRadius: 10,
+  //   marginTop: 10,
+  // },
   textContainer: {
     flex: 1,
   },
-  image: {
-    width: 31,
-    height: 31,
+  // image: {
+  //   width: 31,
+  //   height: 31,
+  //   marginRight: 10,
+  // },
+  containerService: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    backgroundColor: "#E1EBEE",
+    borderRadius: 12,
+    marginTop: 10,
+  },
+
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#007bff",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
+    backgroundColor: "#fff",
+  },
+
+  addButton: {
+    borderWidth: 1,
+    borderColor: "#007BFF",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: "#fff",
+  },
+
+  addButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#007BFF",
   },
 
   semiBold: {
@@ -2056,21 +2142,22 @@ const styles = StyleSheet.create({
   addDetails: {
     color: "#007BFF",
     fontWeight: "600",
-    fontSize: 12,
+    fontSize: 13,
     borderColor: "black",
     borderWidth: 1,
     padding: 5,
   },
   savedDetails: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#555",
-    marginTop: 7,
+    marginTop: 5,
     fontWeight: "600",
   },
   modalOverlay: {
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     flex: 1,
     justifyContent: "center",
+
   },
   modalContent: {
     backgroundColor: "white",

@@ -105,13 +105,13 @@ export default function Index() {
     };
   }, []);
 
-  // const storeToken = async (token) => {
-  //   try {
-  //     await AsyncStorage.setItem("@token", token);
-  //   } catch (error) {
-  //     console.error("Error storing the token:", error);
-  //   }
-  // };
+  const storeToken = async (token) => {
+    try {
+      await AsyncStorage.setItem("@token", token);
+    } catch (error) {
+      console.error("Error storing the token:", error);
+    }
+  };
 
   const fetchUserRole = async (email) => {
     try {
@@ -149,7 +149,7 @@ export default function Index() {
   const onGoogleButtonPress = async () => {
     try {
       await GoogleSignin.hasPlayServices();
-      // const response = await GoogleSignin.signIn();
+      const response = await GoogleSignin.signIn();
       const tokens = await GoogleSignin.getTokens();
       const accessToken = tokens.accessToken;
       const userInfo = await GoogleSignin.getCurrentUser();
