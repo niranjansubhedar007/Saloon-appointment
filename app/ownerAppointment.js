@@ -1157,7 +1157,7 @@ export default function OwnerAppointment() {
                 <View>
                 {savedRecipient && (
                   <Text style={styles.savedDetails}>
-                    {savedRecipient.full_name || "Select Customer"} -{" "}
+                    {savedRecipient.full_name || "Customer Name"} -{" "}
                     {savedRecipient.mobile_number || ""}
                   </Text>
                 )}

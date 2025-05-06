@@ -11,10 +11,15 @@ import {
   TouchableWithoutFeedback,
   TextInput,
   Alert,
+  ActivityIndicator,
+  Keyboard,
+  Image,
 } from "react-native";
 import { createClient } from "@supabase/supabase-js";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
+import { useRouter, useLocalSearchParams } from "expo-router";
+
 import Footer from "./footer";
 import FontAwesome from "react-native-vector-icons/FontAwesome";
 
@@ -43,6 +48,8 @@ const Report = () => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
   const [orderDetails, setOrderDetails] = useState({
     items: [],
     discount: {
@@ -58,45 +65,111 @@ const Report = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Get the user data passed from the login screen
+  useEffect(() => {
+    try {
+      const userData = JSON.parse(params.user);
+      setCurrentUser(userData);
+      console.log("User data:", userData);
+    } catch (error) {
+      // console.error("Error parsing user data:", error);
+    }
+  }, [params.user]);
 
   // Function to update password
+  // const updatePassword = async () => {
+  //   if (newPassword !== confirmPassword) {
+  //     Alert.alert("Error", "New password and confirm password don't match");
+  //     return;
+  //   }
+
+  //   if (!currentPassword || !newPassword || !confirmPassword) {
+  //     Alert.alert("Error", "Please fill all fields");
+  //     return;
+  //   }
+
+  //   setIsUpdatingPassword(true);
+
+  //   try {
+  //     // First, verify current password
+  //     const { data: settings, error } = await supabase
+  //       .from("Setting")
+  //       .select("*")
+  //       .eq("key", "password")
+  //       .single();
+
+  //     if (error) throw error;
+
+  //     if (settings.value !== currentPassword) {
+  //       Alert.alert("Error", "Current password is incorrect");
+  //       setIsUpdatingPassword(false);
+  //       return;
+  //     }
+
+  //     // Update password
+  //     const { error: updateError } = await supabase
+  //       .from("Setting")
+  //       .update({ value: newPassword })
+  //       .eq("key", "password");
+
+  //     if (updateError) throw updateError;
+
+  //     Alert.alert("Success", "Password updated successfully");
+  //     setShowPasswordModal(false);
+  //     setCurrentPassword("");
+  //     setNewPassword("");
+  //     setConfirmPassword("");
+  //   } catch (error) {
+  //     console.error("Error updating password:", error);
+  //     Alert.alert("Error", "Failed to update password");
+  //   } finally {
+  //     setIsUpdatingPassword(false);
+  //   }
+  // };
+
+
   const updatePassword = async () => {
     if (newPassword !== confirmPassword) {
       Alert.alert("Error", "New password and confirm password don't match");
       return;
     }
-
+  
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert("Error", "Please fill all fields");
       return;
     }
-
+  
     setIsUpdatingPassword(true);
-
+  
     try {
-      // First, verify current password
-      const { data: settings, error } = await supabase
+      // Use currentUser.email directly
+      const { data: userSetting, error } = await supabase
         .from("Setting")
         .select("*")
-        .eq("key", "password")
+        .eq("email", currentUser.email)
         .single();
-
+  
       if (error) throw error;
-
-      if (settings.value !== currentPassword) {
+  
+      if (userSetting.password !== currentPassword) {
         Alert.alert("Error", "Current password is incorrect");
         setIsUpdatingPassword(false);
         return;
       }
-
-      // Update password
+  
       const { error: updateError } = await supabase
         .from("Setting")
-        .update({ value: newPassword })
-        .eq("key", "password");
-
+        .update({ password: newPassword })
+        .eq("email", currentUser.email);
+  
       if (updateError) throw updateError;
-
+  
       Alert.alert("Success", "Password updated successfully");
       setShowPasswordModal(false);
       setCurrentPassword("");
@@ -109,6 +182,7 @@ const Report = () => {
       setIsUpdatingPassword(false);
     }
   };
+  
 
   // ... (keep all your existing functions)
 
@@ -340,10 +414,49 @@ const Report = () => {
       0
     );
   };
+  const handleDeleteAccount = async () => {
+    Alert.alert("Warning", "Are you sure you want to delete your account?");
+    if (!currentUser) return;
+
+    try {
+      setLoading(true);
+
+      // First try to delete from auth.users table if exists
+      try {
+        const { error: authError } = await supabase.auth.admin.deleteUser(
+          currentUser.email
+        );
+        if (authError && !authError.message.includes("User not found")) {
+          throw authError;
+        }
+      } catch (authError) {
+        console.log("Auth user deletion skipped (might not exist)", authError);
+      }
+
+      // Delete from Setting table
+      const { error: settingError } = await supabase
+        .from("Setting")
+        .delete()
+        .eq("id", currentUser.id);
+
+      if (settingError) throw settingError;
+
+      Alert.alert("Success", "Account has been deleted successfully");
+      router.back();
+    } catch (error) {
+      console.error("Delete error:", error);
+      Alert.alert("Error", "Failed to delete account. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const handleGoBack = () => {
+    setModalVisible(false);
+  };
 
   return (
     <>
-      <ScrollView
+      <View
         // contentContainerStyle={styles.container}
         // refreshControl={
         //   <RefreshControl
@@ -360,13 +473,90 @@ const Report = () => {
       >
         <View style={styles.headerContainer}>
           <Text style={styles.title}>📊 Sales Report</Text>
-          <TouchableOpacity
-            onPress={() => setShowPasswordModal(true)}
-            style={styles.settingsButton}
-          >
-            <Feather name="settings" size={20} color="#007bff" />
-          </TouchableOpacity>
+
+          {/* Settings Button */}
+          {Platform.OS === "ios" && (
+            <TouchableOpacity
+              onPress={() => setShowSettingsMenu(!showSettingsMenu)}
+              style={styles.settingsButton}
+            >
+              <Feather name="settings" size={20} color="#007bff" />
+            </TouchableOpacity>
+          )}
+
+          {/* Settings Menu */}
+          {showSettingsMenu && (
+            <View style={styles.settingsMenu}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowSettingsMenu(false);
+                  setShowPasswordModal(true);
+                }}
+              >
+                <Text style={styles.menuItemText}>Change Password</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowSettingsMenu(false);
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.menuItemText}>Delete Account</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={modalVisible}
+          onRequestClose={handleGoBack}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.passwordModalContainer}>
+              <Text style={styles.modalTitle}>Delete Account</Text>
+              {currentUser && (
+                <>
+                  <Text style={styles.userInfoText}>
+                    Username: {currentUser.name}
+                  </Text>
+                  <Text style={styles.userInfoText}>
+                    Email: {currentUser.email}
+                  </Text>
+                </>
+              )}
+              <Text style={styles.modalText}>
+                Are you sure you want to delete this account?
+              </Text>
+
+              {loading ? (
+                <ActivityIndicator size="large" color="#1A2980" />
+              ) : (
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.closeButton]}
+                    onPress={handleGoBack}
+                  >
+                    <Text style={[styles.modalButtonText, { color: "white" }]}>
+                      Close
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.deleteButton]}
+                    onPress={handleDeleteAccount}
+                  >
+                    <Text style={[styles.modalButtonText, { color: "white" }]}>
+                      Delete Account
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
         <Modal
           visible={showPasswordModal}
           animationType="slide"
@@ -825,7 +1015,8 @@ const Report = () => {
             </View>
           </View>
         </Modal>
-      </ScrollView>
+      </View>
+
       <View style={styles.tableContainer}>
         {/* Total Sales */}
         <View style={styles.totalRow}>
@@ -858,6 +1049,86 @@ const Report = () => {
 };
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 10,
+    position: "relative", // Added for absolute positioning of settings button
+    paddingHorizontal: 40, // Added to prevent title from being covered
+    zIndex: 1, // Ensure it appears above other elements
+  },
+  settingsButton: {
+    position: "absolute",
+    right: 10,
+    padding: 8,
+    backgroundColor: "#e6f0ff",
+    borderRadius: 20,
+    zIndex: 10,
+  },
+  settingsMenu: {
+    position: "absolute",
+    top: 40, // Adjusted to appear below the button
+    right: 10,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    paddingVertical: 8,
+    width: 180,
+    zIndex: 20, // Ensure it appears above other elements
+  },
+  menuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: "#333",
+  },
+
+  userInfoText: {
+    fontSize: 16,
+    color: "#2c3e50",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalText: {
+    fontSize: 16,
+    color: "#7f8c8d",
+    marginBottom: 25,
+    textAlign: "center",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modalButton: {
+    borderRadius: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    minWidth: "45%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#e9ecef",
+  },
+  deleteButton: {
+    backgroundColor: "#e74c3c",
+  },
+  closeButton: {
+    backgroundColor: "#007bff",
+  },
+  modalButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+
   passwordInputWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -873,14 +1144,7 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 10,
   },
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    marginBottom: 10,
-    position: "relative",
-  },
+
   settingsButton: {
     position: "absolute",
     right: 0,
